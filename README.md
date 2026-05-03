@@ -28,6 +28,12 @@ src/main/java/com/aidemo/myaitravelreimbursement/
 └── constant/      # 常量
 ```
 
+
+
+
+
+
+
 ## 快速开始
 
 ### 1. 环境要求
@@ -139,6 +145,7 @@ java -jar target/MyAI-travel-reimbursement-0.0.1-SNAPSHOT.jar
 | PUT | `/settings` | 更新全局设置 |
 
 ## 统一响应格式
+
 
 ```json
 {
