@@ -1,0 +1,116 @@
+-- =============================================
+-- Travel Reimbursement AI - 数据库建表脚本
+-- 数据库: travel_db
+-- =============================================
+
+CREATE DATABASE IF NOT EXISTS travel_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE travel_db;
+
+-- 1. 报销项目表
+CREATE TABLE IF NOT EXISTS t_project (
+  id           BIGINT PRIMARY KEY AUTO_INCREMENT,
+  name         VARCHAR(100) NOT NULL COMMENT '项目名称',
+  destination  VARCHAR(200) COMMENT '目的地',
+  start_date   DATE COMMENT '开始日期',
+  end_date     DATE COMMENT '结束日期',
+  reason       VARCHAR(500) COMMENT '出差事由',
+  person       VARCHAR(50) COMMENT '出差人',
+  department   VARCHAR(100) COMMENT '部门',
+  budget       DECIMAL(12,2) COMMENT '预算金额',
+  remark       VARCHAR(500) COMMENT '备注',
+  status       TINYINT DEFAULT 0 COMMENT '状态: 0-草稿 1-进行中 2-已完成',
+  deleted      TINYINT DEFAULT 0 COMMENT '逻辑删除: 0-未删除 1-已删除',
+  created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='报销项目表';
+
+-- 2. 文件夹目录表
+CREATE TABLE IF NOT EXISTS t_folder (
+  id         BIGINT PRIMARY KEY AUTO_INCREMENT,
+  project_id BIGINT NOT NULL COMMENT '所属项目ID',
+  name       VARCHAR(100) NOT NULL COMMENT '文件夹名称',
+  parent_id  BIGINT DEFAULT 0 COMMENT '父文件夹ID, 0表示根目录',
+  sort_order INT DEFAULT 0 COMMENT '排序',
+  deleted    TINYINT DEFAULT 0 COMMENT '逻辑删除',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES t_project(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文件夹目录表';
+
+-- 3. 上传文件表
+CREATE TABLE IF NOT EXISTS t_upload_file (
+  id                  BIGINT PRIMARY KEY AUTO_INCREMENT,
+  project_id          BIGINT NOT NULL COMMENT '所属项目ID',
+  folder_id           BIGINT COMMENT '所属文件夹ID',
+  name                VARCHAR(255) NOT NULL COMMENT '存储文件名',
+  original_name       VARCHAR(255) NOT NULL COMMENT '原始文件名',
+  size                BIGINT COMMENT '文件大小(字节)',
+  type                VARCHAR(20) COMMENT '文件类型: invoice/screenshot/attachment',
+  mime_type           VARCHAR(100) COMMENT 'MIME类型',
+  storage_path        VARCHAR(500) COMMENT '存储路径',
+  status              TINYINT DEFAULT 0 COMMENT '识别状态: 0-待识别 1-识别中 2-成功 3-失败',
+  remark              VARCHAR(500) COMMENT '备注',
+  confirmed           TINYINT DEFAULT 0 COMMENT '是否已确认: 0-未确认 1-已确认',
+  deleted             TINYINT DEFAULT 0 COMMENT '逻辑删除',
+  created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES t_project(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='上传文件表';
+
+-- 4. AI识别结果表
+CREATE TABLE IF NOT EXISTS t_recognition_result (
+  id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+  project_id      BIGINT NOT NULL COMMENT '所属项目ID(冗余字段)',
+  file_id         BIGINT NOT NULL UNIQUE COMMENT '关联文件ID',
+  type            VARCHAR(20) COMMENT '识别类型: invoice/screenshot',
+  expense_type    VARCHAR(50) COMMENT '费用类型: transport/catering/accommodation/purchase',
+  ai_filename     VARCHAR(255) COMMENT 'AI建议的文件名',
+  description     TEXT COMMENT '文件简述',
+  invoice_number  VARCHAR(100) COMMENT '发票号码',
+  invoice_date    DATE COMMENT '发票日期',
+  total_amount    DECIMAL(12,2) COMMENT '价税合计金额',
+  seller          VARCHAR(200) COMMENT '销售方名称',
+  buyer           VARCHAR(200) COMMENT '购买方名称',
+  consumption_count VARCHAR(50) COMMENT '消费次数(截图)',
+  consumption_date  DATE COMMENT '消费日期(截图)',
+  total_consumption DECIMAL(12,2) COMMENT '总额(截图)',
+  confidence      DECIMAL(5,4) COMMENT '识别置信度',
+  raw_response    TEXT COMMENT 'AI返回原始JSON',
+  deleted         TINYINT DEFAULT 0 COMMENT '逻辑删除',
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (file_id) REFERENCES t_upload_file(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI识别结果表';
+
+-- 5. 报表明细表
+CREATE TABLE IF NOT EXISTS t_report_item (
+  id               BIGINT PRIMARY KEY AUTO_INCREMENT,
+  project_id       BIGINT NOT NULL COMMENT '所属项目ID',
+  date             DATE NOT NULL COMMENT '报销日期',
+  receipt_type     VARCHAR(50) NOT NULL COMMENT '凭证类型: transport/catering/accommodation/purchase',
+  summary          VARCHAR(500) COMMENT '摘要',
+  amount           DECIMAL(12,2) NOT NULL COMMENT '金额',
+  remark           VARCHAR(500) COMMENT '备注',
+  has_receipt      TINYINT DEFAULT 1 COMMENT '是否有票据: 0-无 1-有',
+  receipt_file_id  BIGINT COMMENT '关联票据文件ID',
+  deleted          TINYINT DEFAULT 0 COMMENT '逻辑删除',
+  created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES t_project(id) ON DELETE CASCADE,
+  FOREIGN KEY (receipt_file_id) REFERENCES t_upload_file(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='报表明细表';
+
+-- 6. 全局设置表
+CREATE TABLE IF NOT EXISTS t_settings (
+  id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+  setting_key VARCHAR(100) NOT NULL UNIQUE COMMENT '设置键',
+  setting_value TEXT COMMENT '设置值',
+  description VARCHAR(255) COMMENT '描述',
+  updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='全局设置表';
+
+-- 初始化默认设置
+INSERT INTO t_settings (setting_key, setting_value, description) VALUES
+  ('app_name', '差旅报销助手', '应用名称'),
+  ('auto_recognize', 'false', '上传后自动识别'),
+  ('auto_archive', 'true', '识别后自动归档');
