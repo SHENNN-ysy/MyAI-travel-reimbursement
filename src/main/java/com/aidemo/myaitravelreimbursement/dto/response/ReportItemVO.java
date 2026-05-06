@@ -16,8 +16,10 @@ public class ReportItemVO {
     private Long id;
     private Long projectId;
     private LocalDate date;
-    private String receiptType;
-    private String receiptTypeName;
+    private String receiptType; // 票据类型：发票/截图
+    private String receiptTypeName; // 票据类型中文名
+    private String expenseType; // 消费类型：transport/catering/accommodation/purchase
+    private String expenseTypeName; // 消费类型中文名
     private String summary;
     private BigDecimal amount;
     private String remark;
@@ -35,6 +37,8 @@ public class ReportItemVO {
         vo.setDate(item.getDate());
         vo.setReceiptType(item.getReceiptType());
         vo.setReceiptTypeName(ExpenseType.getName(item.getReceiptType()));
+        vo.setExpenseType(item.getExpenseType());
+        vo.setExpenseTypeName(ExpenseType.getExpenseTypeName(item.getExpenseType()));
         vo.setSummary(item.getSummary());
         vo.setAmount(item.getAmount());
         vo.setRemark(item.getRemark());

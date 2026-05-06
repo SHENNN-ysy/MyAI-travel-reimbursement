@@ -3,6 +3,7 @@ package com.aidemo.myaitravelreimbursement.service.impl;
 import com.aidemo.myaitravelreimbursement.common.BusinessException;
 import com.aidemo.myaitravelreimbursement.common.ErrorCode;
 import com.aidemo.myaitravelreimbursement.common.PageResult;
+import com.aidemo.myaitravelreimbursement.config.StorageConfig;
 import com.aidemo.myaitravelreimbursement.dto.request.FolderDTO;
 import com.aidemo.myaitravelreimbursement.dto.request.ProjectCreateDTO;
 import com.aidemo.myaitravelreimbursement.dto.request.ProjectUpdateDTO;
@@ -23,7 +24,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 
@@ -38,6 +43,7 @@ public class ProjectServiceImpl implements ProjectService {
     private final UploadFileMapper uploadFileMapper;
     private final RecognitionResultMapper recognitionResultMapper;
     private final FolderService folderService;
+    private final StorageConfig storageConfig;
 
     @Override
     @Transactional
@@ -60,32 +66,54 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     private void createDefaultFolders(Long projectId, String projectName) {
+        // 1. 创建数据库记录：主文件夹（与项目同名）
         FolderDTO parentDto = new FolderDTO();
         parentDto.setName(projectName);
         parentDto.setSortOrder(0);
         FolderVO parentFolder = folderService.create(projectId, parentDto);
 
-        // 创建三个默认文件夹：发票文件、付款截图、附加材料
-        FolderDTO invoiceDto = new FolderDTO();
-        invoiceDto.setName("发票文件");
-        invoiceDto.setType("invoice");
-        invoiceDto.setParentId(parentFolder.getId());
-        invoiceDto.setSortOrder(1);
-        folderService.create(projectId, invoiceDto);
+        // 2. 创建三个子文件夹：发票文件、付款截图、附加材料
+        String[] subNames = {"发票文件", "付款截图", "附加材料"};
+        String[] subTypes = {"invoice", "screenshot", "attachment"};
+        int[] subOrders = {1, 2, 3};
 
-        FolderDTO screenshotDto = new FolderDTO();
-        screenshotDto.setName("付款截图");
-        screenshotDto.setType("screenshot");
-        screenshotDto.setParentId(parentFolder.getId());
-        screenshotDto.setSortOrder(2);
-        folderService.create(projectId, screenshotDto);
+        String[] createdSubFolderNames = new String[3];
+        for (int i = 0; i < 3; i++) {
+            FolderDTO subDto = new FolderDTO();
+            subDto.setName(subNames[i]);
+            subDto.setType(subTypes[i]);
+            subDto.setParentId(parentFolder.getId());
+            subDto.setSortOrder(subOrders[i]);
+            folderService.create(projectId, subDto);
+            createdSubFolderNames[i] = subNames[i];
+        }
 
-        FolderDTO attachmentDto = new FolderDTO();
-        attachmentDto.setName("附加材料");
-        attachmentDto.setType("attachment");
-        attachmentDto.setParentId(parentFolder.getId());
-        attachmentDto.setSortOrder(3);
-        folderService.create(projectId, attachmentDto);
+        // 3. 在磁盘上创建物理目录结构
+        createPhysicalFolders(projectId, projectName, createdSubFolderNames);
+    }
+
+    /**
+     * 在磁盘上创建项目文件夹结构：
+     * D:/myAI-tool/travel-files/{projectId}/{projectName}/
+     * D:/myAI-tool/travel-files/{projectId}/{projectName}/发票文件/
+     * D:/myAI-tool/travel-files/{projectId}/{projectName}/付款截图/
+     * D:/myAI-tool/travel-files/{projectId}/{projectName}/附加材料/
+     */
+    private void createPhysicalFolders(Long projectId, String projectName, String[] subFolderNames) {
+        try {
+            // 主目录：basePath/projectId/projectName/
+            Path mainDir = Paths.get(storageConfig.getBasePath(), String.valueOf(projectId), projectName);
+            Files.createDirectories(mainDir);
+
+            // 子目录：主目录/子文件夹名/
+            for (String subName : subFolderNames) {
+                Path subDir = mainDir.resolve(subName);
+                Files.createDirectories(subDir);
+            }
+        } catch (IOException e) {
+            // 磁盘目录创建失败不影响业务逻辑，仅记录日志
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "创建项目文件夹失败: " + e.getMessage());
+        }
     }
 
     @Override

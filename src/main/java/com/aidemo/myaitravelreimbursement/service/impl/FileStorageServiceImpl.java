@@ -6,9 +6,13 @@ import com.aidemo.myaitravelreimbursement.config.StorageConfig;
 import com.aidemo.myaitravelreimbursement.constant.FileStatus;
 import com.aidemo.myaitravelreimbursement.dto.request.FileUpdateDTO;
 import com.aidemo.myaitravelreimbursement.dto.response.FileVO;
+import com.aidemo.myaitravelreimbursement.entity.Folder;
+import com.aidemo.myaitravelreimbursement.entity.Project;
 import com.aidemo.myaitravelreimbursement.entity.RecognitionResult;
 import com.aidemo.myaitravelreimbursement.entity.ReportItem;
 import com.aidemo.myaitravelreimbursement.entity.UploadFile;
+import com.aidemo.myaitravelreimbursement.mapper.FolderMapper;
+import com.aidemo.myaitravelreimbursement.mapper.ProjectMapper;
 import com.aidemo.myaitravelreimbursement.mapper.RecognitionResultMapper;
 import com.aidemo.myaitravelreimbursement.mapper.ReportItemMapper;
 import com.aidemo.myaitravelreimbursement.mapper.UploadFileMapper;
@@ -27,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -44,6 +49,8 @@ public class FileStorageServiceImpl implements FileStorageService {
     private final UploadFileMapper uploadFileMapper;
     private final RecognitionResultMapper recognitionResultMapper;
     private final ReportItemMapper reportItemMapper;
+    private final FolderMapper folderMapper;
+    private final ProjectMapper projectMapper;
     private final StorageConfig storageConfig;
 
     @Override
@@ -62,11 +69,31 @@ public class FileStorageServiceImpl implements FileStorageService {
         String storageName = UUID.randomUUID().toString().replace("-", "") + "."
                 + FileUtils.getExtension(originalName);
 
-        String folderPath = projectId + "/" + (folderId != null ? folderId : "0");
-        String relativePath = folderPath + "/" + storageName;
-        String fullPath = storageConfig.getBasePath() + "/" + relativePath;
+        // 构建磁盘路径：basePath/projectId/projectName/folderName/storageName
+        // 例：D:/myAI-tool/travel-files/1/2026年5月出差/发票文件/abc123.pdf
+        String relativePath;
+        if (folderId != null && folderId > 0) {
+            // 查询项目名和文件夹名，构建正确路径
+            Project project = projectMapper.selectById(projectId);
+            Folder folder = folderMapper.selectById(folderId);
+            if (project == null) {
+                throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
+            }
+            // 文件夹名：子文件夹用 folder.name，主文件夹用 project.name
+            String folderName = (folder.getParentId() != null && folder.getParentId() > 0)
+                    ? folder.getName()
+                    : project.getName();
+            relativePath = projectId + "/" + project.getName() + "/" + folderName + "/" + storageName;
+        } else {
+            // 无 folderId，回退到旧路径
+            relativePath = projectId + "/0/" + storageName;
+        }
 
-        FileUtils.ensureDirectoryExists(new java.io.File(fullPath).getParentFile().getAbsolutePath());
+        String fullPath = storageConfig.getBasePath() + "/" + relativePath;
+        Path dir = Paths.get(fullPath).getParent();
+        if (dir != null) {
+            Files.createDirectories(dir);
+        }
         Files.copy(file.getInputStream(), Paths.get(fullPath), StandardCopyOption.REPLACE_EXISTING);
 
         UploadFile uploadFile = new UploadFile();
@@ -180,6 +207,10 @@ public class FileStorageServiceImpl implements FileStorageService {
         if (dto.getConfirmed() != null) {
             file.setConfirmed(dto.getConfirmed());
         }
+        // 若传入了 aiFilename，则更新文件存储名
+        if (dto.getAiFilename() != null && !dto.getAiFilename().isBlank()) {
+            file.setName(dto.getAiFilename());
+        }
         uploadFileMapper.updateById(file);
 
         // 2. 更新或新增识别结果记录
@@ -191,16 +222,19 @@ public class FileStorageServiceImpl implements FileStorageService {
         );
 
         if (result == null) {
-            // 无识别结果记录，则新建
             result = new RecognitionResult();
             result.setFileId(fileId);
             result.setProjectId(file.getProjectId());
             fillRecognitionResult(result, dto);
             recognitionResultMapper.insert(result);
         } else {
-            // 更新已有记录
             fillRecognitionResult(result, dto);
             recognitionResultMapper.updateById(result);
+        }
+
+        // 3. 确认文件时（confirmed=1）自动创建报表明细（仅发票/截图，attachment 跳过）
+        if (dto.getConfirmed() != null && dto.getConfirmed() == 1 && !"attachment".equals(file.getType())) {
+            createOrUpdateReportItem(file, result);
         }
 
         return FileVO.fromEntity(file, result);
@@ -256,6 +290,18 @@ public class FileStorageServiceImpl implements FileStorageService {
             UploadFile file = uploadFileMapper.selectById(fileId);
             if (file != null && file.getProjectId().equals(projectId)) {
                 file.setConfirmed(1);
+                // 若有 aiFilename 则更新文件存储名
+                if (file.getName() != null) {
+                    RecognitionResult tmpResult = recognitionResultMapper.selectOne(
+                            new LambdaQueryWrapper<RecognitionResult>()
+                                    .eq(RecognitionResult::getFileId, fileId)
+                                    .orderByDesc(RecognitionResult::getCreatedAt)
+                                    .last("LIMIT 1")
+                    );
+                    if (tmpResult != null && tmpResult.getAiFilename() != null && !tmpResult.getAiFilename().isBlank()) {
+                        file.setName(tmpResult.getAiFilename());
+                    }
+                }
                 uploadFileMapper.updateById(file);
 
                 // 查询识别结果
@@ -266,8 +312,10 @@ public class FileStorageServiceImpl implements FileStorageService {
                                 .last("LIMIT 1")
                 );
 
-                // 根据识别结果自动创建或更新报表明细
-                createOrUpdateReportItem(file, recognitionResult);
+                // 仅发票/截图文件自动创建报表明细，attachment 跳过
+                if (!"attachment".equals(file.getType())) {
+                    createOrUpdateReportItem(file, recognitionResult);
+                }
 
                 results.add(FileVO.fromEntity(file, recognitionResult));
             }
@@ -275,88 +323,135 @@ public class FileStorageServiceImpl implements FileStorageService {
         return results;
     }
 
+    @Override
+    public FileVO unconfirmFile(Long fileId) {
+        UploadFile file = uploadFileMapper.selectById(fileId);
+        if (file == null) {
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND);
+        }
+        // 将确认状态改为未确认
+        file.setConfirmed(0);
+        uploadFileMapper.updateById(file);
+
+        // 查询识别结果
+        RecognitionResult recognitionResult = recognitionResultMapper.selectOne(
+                new LambdaQueryWrapper<RecognitionResult>()
+                        .eq(RecognitionResult::getFileId, fileId)
+                        .orderByDesc(RecognitionResult::getCreatedAt)
+                        .last("LIMIT 1")
+        );
+
+        // 软删除对应的报表明细（标记 deleted=1，不做物理删除）
+        if (!"attachment".equals(file.getType())) {
+            reportItemMapper.softDeleteByReceiptFileId(fileId);
+        }
+
+        return FileVO.fromEntity(file, recognitionResult);
+    }
+
     /**
      * 根据文件确认状态自动创建或更新报表明细
-     * 字段映射关系：
-     * - date: invoiceDate(发票) 或 consumptionDate(截图)
-     * - receiptType: expenseType
-     * - hasReceipt: 固定为1
-     * - receiptFile: aiFilename
-     * - amount: totalAmount(发票) 或 totalConsumption(截图)
-     * - summary: description
-     * - remark: file.remark
-     * - receiptFileId: file.id
+     * 字段映射关系（按用户规范）：
+     * 发票文件: 开票日期→日期, 消费类型→消费类型, 固定"发票"→票据类型, AI文件改名→票据文件, 价税合计→金额, 文件简述→摘要, 备注信息→备注
+     * 截图文件: 消费日期→日期, 消费类型→消费类型, 固定"截图"→票据类型, AI文件改名→票据文件, 总额→金额, 文件简述→摘要, 备注信息→备注
      */
     private void createOrUpdateReportItem(UploadFile file, RecognitionResult result) {
-        // 查找是否已存在该文件的报表明细（按receiptFileId查重）
+        // 先查未删除的记录
         LambdaQueryWrapper<ReportItem> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ReportItem::getReceiptFileId, file.getId());
         ReportItem existingItem = reportItemMapper.selectOne(wrapper);
 
-        // 确定报销日期
+        // 若未找到，再尝试查软删除记录（用于恢复）
+        ReportItem softDeletedItem = null;
+        if (existingItem == null) {
+            LambdaQueryWrapper<ReportItem> deletedWrapper = new LambdaQueryWrapper<>();
+            deletedWrapper.eq(ReportItem::getReceiptFileId, file.getId());
+            deletedWrapper.eq(ReportItem::getDeleted, 1);
+            softDeletedItem = reportItemMapper.selectOne(deletedWrapper);
+        }
+
+        // ---- 日期 ----
         java.time.LocalDate date = null;
-        if (result != null) {
-            if (result.getInvoiceDate() != null) {
-                date = result.getInvoiceDate();
-            } else if (result.getConsumptionDate() != null) {
-                date = result.getConsumptionDate();
-            }
+        if (result != null && result.getInvoiceDate() != null) {
+            date = result.getInvoiceDate();
+        } else if (result != null && result.getConsumptionDate() != null) {
+            date = result.getConsumptionDate();
         }
         if (date == null) {
             date = java.time.LocalDate.now();
         }
 
-        // 确定报销金额
-        BigDecimal amount = null;
-        if (result != null) {
-            if (result.getTotalAmount() != null) {
-                amount = result.getTotalAmount();
-            } else if (result.getTotalConsumption() != null) {
-                amount = result.getTotalConsumption();
-            }
+        // ---- 消费类型 ----
+        String expenseType = (result != null && result.getExpenseType() != null)
+                ? result.getExpenseType()
+                : "transport";
+
+        // ---- 票据类型（固定值）----
+        String receiptType = "发票";
+        if ("screenshot".equals(file.getType())) {
+            receiptType = "截图";
         }
 
-        // 确定文件名
+        // ---- 票据文件（AI文件改名）----
         String receiptFile = null;
-        if (result != null && result.getAiFilename() != null) {
+        if (result != null && result.getAiFilename() != null && !result.getAiFilename().isBlank()) {
             receiptFile = result.getAiFilename();
         }
-
-        // 确定摘要
-        String summary = null;
-        if (result != null && result.getDescription() != null) {
-            summary = result.getDescription();
+        if (receiptFile == null) {
+            receiptFile = (file.getOriginalName() != null) ? file.getOriginalName() : file.getName();
         }
 
+        // ---- 金额 ----
+        BigDecimal amount = BigDecimal.ZERO;
+        if ("invoice".equals(file.getType()) && result != null && result.getTotalAmount() != null) {
+            amount = result.getTotalAmount();
+        } else if ("screenshot".equals(file.getType()) && result != null && result.getTotalConsumption() != null) {
+            amount = result.getTotalConsumption();
+        }
+
+        // ---- 摘要（文件简述）----
+        String summary = (result != null && result.getDescription() != null && !result.getDescription().isBlank())
+                ? result.getDescription()
+                : null;
+
+        // ---- 备注（备注信息）----
+        String remark = file.getRemark();
+
         if (existingItem != null) {
-            // 已存在则更新
+            // 已有未删除记录 → 更新
             existingItem.setDate(date);
-            if (result != null && result.getExpenseType() != null) {
-                existingItem.setReceiptType(result.getExpenseType());
-            }
+            existingItem.setReceiptType(receiptType);
+            existingItem.setExpenseType(expenseType);
             existingItem.setHasReceipt(1);
-            if (receiptFile != null) existingItem.setReceiptFile(receiptFile);
-            if (amount != null) existingItem.setAmount(amount);
+            existingItem.setReceiptFile(receiptFile);
+            existingItem.setAmount(amount);
             if (summary != null) existingItem.setSummary(summary);
-            if (file.getRemark() != null) existingItem.setRemark(file.getRemark());
+            if (remark != null) existingItem.setRemark(remark);
             reportItemMapper.updateById(existingItem);
+        } else if (softDeletedItem != null) {
+            // 软删除记录存在 → 恢复并更新
+            softDeletedItem.setDeleted(0);
+            softDeletedItem.setDate(date);
+            softDeletedItem.setReceiptType(receiptType);
+            softDeletedItem.setExpenseType(expenseType);
+            softDeletedItem.setHasReceipt(1);
+            softDeletedItem.setReceiptFile(receiptFile);
+            softDeletedItem.setAmount(amount);
+            if (summary != null) softDeletedItem.setSummary(summary);
+            if (remark != null) softDeletedItem.setRemark(remark);
+            reportItemMapper.updateById(softDeletedItem);
         } else {
-            // 不存在则创建
+            // 无任何记录 → 新建
             ReportItem item = new ReportItem();
             item.setProjectId(file.getProjectId());
             item.setDate(date);
-            if (result != null && result.getExpenseType() != null) {
-                item.setReceiptType(result.getExpenseType());
-            }
+            item.setReceiptType(receiptType);
+            item.setExpenseType(expenseType);
             item.setHasReceipt(1);
-            if (receiptFile != null) item.setReceiptFile(receiptFile);
-            if (amount != null) {
-                item.setAmount(amount);
-            } else {
-                item.setAmount(BigDecimal.ZERO);
-            }
+            item.setReceiptFile(receiptFile);
+            item.setAmount(amount);
             if (summary != null) item.setSummary(summary);
-            if (file.getRemark() != null) item.setRemark(file.getRemark());
+            if (remark != null) item.setRemark(remark);
             item.setReceiptFileId(file.getId());
             reportItemMapper.insert(item);
         }

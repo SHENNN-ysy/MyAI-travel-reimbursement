@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * 报表管理控制器
@@ -33,7 +34,7 @@ public class ReportController {
     private final ReportService reportService;
     private final ProjectMapper projectMapper;
 
-    @Operation(summary = "获取报表明细列表")
+    @Operation(summary = "获取报表明细列表（分页）")
     @GetMapping("/items")
     public Result<PageResult<ReportItemVO>> listItems(
             @PathVariable Long projectId,
@@ -41,6 +42,14 @@ public class ReportController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String receiptType) {
         return Result.success(reportService.pageItems(projectId, current, size, receiptType));
+    }
+
+    @Operation(summary = "获取报表明细列表（全部，不分页）")
+    @GetMapping("/items/all")
+    public Result<List<ReportItemVO>> listAllItems(
+            @PathVariable Long projectId,
+            @RequestParam(required = false) String receiptType) {
+        return Result.success(reportService.listItems(projectId, receiptType));
     }
 
     @Operation(summary = "添加报表明细")

@@ -20,7 +20,11 @@ public class ReportItemDTO {
 
     @NotNull(message = "凭证类型不能为空")
     @Size(max = 50, message = "凭证类型不能超过50字符")
-    private String receiptType;
+    private String receiptType; // 票据类型: 发票/截图
+
+    @NotNull(message = "消费类型不能为空")
+    @Size(max = 50, message = "消费类型不能超过50字符")
+    private String expenseType; // 消费类型: transport/catering/accommodation/purchase
 
     @NotNull(message = "是否有票据不能为空")
     private Integer hasReceipt;

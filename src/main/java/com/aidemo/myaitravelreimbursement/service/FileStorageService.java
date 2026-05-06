@@ -25,5 +25,7 @@ public interface FileStorageService {
 
     List<FileVO> batchConfirm(Long projectId, List<Long> fileIds);
 
+    FileVO unconfirmFile(Long fileId);
+
     byte[] downloadFile(Long fileId);
 }

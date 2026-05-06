@@ -83,6 +83,7 @@ public class ReportServiceImpl implements ReportService {
         item.setProjectId(projectId);
         item.setDate(dto.getDate());
         item.setReceiptType(dto.getReceiptType());
+        item.setExpenseType(dto.getExpenseType());
         item.setSummary(dto.getSummary());
         item.setAmount(dto.getAmount());
         item.setRemark(dto.getRemark());
@@ -102,6 +103,7 @@ public class ReportServiceImpl implements ReportService {
         }
         if (dto.getDate() != null) item.setDate(dto.getDate());
         if (dto.getReceiptType() != null) item.setReceiptType(dto.getReceiptType());
+        if (dto.getExpenseType() != null) item.setExpenseType(dto.getExpenseType());
         if (dto.getSummary() != null) item.setSummary(dto.getSummary());
         if (dto.getAmount() != null) item.setAmount(dto.getAmount());
         if (dto.getRemark() != null) item.setRemark(dto.getRemark());
@@ -144,12 +146,12 @@ public class ReportServiceImpl implements ReportService {
         BigDecimal purchase = BigDecimal.ZERO;
 
         for (ReportItem item : items) {
-            total = total.add(item.getAmount());
-            switch (item.getReceiptType()) {
-                case ExpenseType.TRANSPORT -> transport = transport.add(item.getAmount());
-                case ExpenseType.CATERING -> catering = catering.add(item.getAmount());
-                case ExpenseType.ACCOMMODATION -> accommodation = accommodation.add(item.getAmount());
-                case ExpenseType.PURCHASE -> purchase = purchase.add(item.getAmount());
+            total = total.add(item.getAmount() != null ? item.getAmount() : BigDecimal.ZERO);
+            switch (item.getExpenseType()) {
+                case "transport" -> transport = transport.add(item.getAmount());
+                case "catering" -> catering = catering.add(item.getAmount());
+                case "accommodation" -> accommodation = accommodation.add(item.getAmount());
+                case "purchase" -> purchase = purchase.add(item.getAmount());
             }
         }
 
@@ -159,10 +161,10 @@ public class ReportServiceImpl implements ReportService {
         vo.setAccommodationAmount(accommodation);
         vo.setPurchaseAmount(purchase);
         vo.setTotalCount((long) items.size());
-        vo.setTransportCount(items.stream().filter(i -> ExpenseType.TRANSPORT.equals(i.getReceiptType())).count());
-        vo.setCateringCount(items.stream().filter(i -> ExpenseType.CATERING.equals(i.getReceiptType())).count());
-        vo.setAccommodationCount(items.stream().filter(i -> ExpenseType.ACCOMMODATION.equals(i.getReceiptType())).count());
-        vo.setPurchaseCount(items.stream().filter(i -> ExpenseType.PURCHASE.equals(i.getReceiptType())).count());
+        vo.setTransportCount(items.stream().filter(i -> "transport".equals(i.getExpenseType())).count());
+        vo.setCateringCount(items.stream().filter(i -> "catering".equals(i.getExpenseType())).count());
+        vo.setAccommodationCount(items.stream().filter(i -> "accommodation".equals(i.getExpenseType())).count());
+        vo.setPurchaseCount(items.stream().filter(i -> "purchase".equals(i.getExpenseType())).count());
 
         if (project.getBudget() != null && total != null) {
             try {
@@ -238,7 +240,7 @@ public class ReportServiceImpl implements ReportService {
 
     private void createSummarySheet(Sheet sheet, CellStyle headerStyle, CellStyle dataStyle,
                                     Project project, ReportSummaryVO summary) {
-        String[] headers = {"项目名称", "出差人", "部门", "出差日期", "总金额", "交通费", "餐饮费", "住宿费", "采购费", "预算项目", "预算使用"};
+        String[] headers = {"项目名称", "出差人", "部门", "出差日期", "总金额", "发票金额", "截图金额", "预算项目", "预算使用"};
         Row headerRow = sheet.createRow(0);
         for (int i = 0; i < headers.length; i++) {
             Cell cell = headerRow.createCell(i);
@@ -257,18 +259,16 @@ public class ReportServiceImpl implements ReportService {
         dataRow.createCell(4).setCellValue(summary.getTotalAmount() != null ? summary.getTotalAmount().doubleValue() : 0.0);
         dataRow.createCell(5).setCellValue(summary.getTransportAmount() != null ? summary.getTransportAmount().doubleValue() : 0.0);
         dataRow.createCell(6).setCellValue(summary.getCateringAmount() != null ? summary.getCateringAmount().doubleValue() : 0.0);
-        dataRow.createCell(7).setCellValue(summary.getAccommodationAmount() != null ? summary.getAccommodationAmount().doubleValue() : 0.0);
-        dataRow.createCell(8).setCellValue(summary.getPurchaseAmount() != null ? summary.getPurchaseAmount().doubleValue() : 0.0);
-        dataRow.createCell(9).setCellValue(summary.getBudgetName() != null ? summary.getBudgetName() : "");
-        dataRow.createCell(10).setCellValue(summary.getBudgetUsed() != null ? summary.getBudgetUsed().doubleValue() : 0.0);
+        dataRow.createCell(7).setCellValue(summary.getBudgetName() != null ? summary.getBudgetName() : "");
+        dataRow.createCell(8).setCellValue(summary.getBudgetUsed() != null ? summary.getBudgetUsed().doubleValue() : 0.0);
 
-        for (int i = 0; i <= 10; i++) {
+        for (int i = 0; i <= 8; i++) {
             dataRow.getCell(i).setCellStyle(dataStyle);
         }
     }
 
     private void createDetailSheet(Sheet sheet, CellStyle headerStyle, CellStyle dataStyle, List<ReportItem> items) {
-        String[] headers = {"日期", "凭证类型", "票据文件", "摘要", "金额", "备注", "有无票据"};
+        String[] headers = {"日期", "票据类型", "消费类型", "票据文件", "摘要", "金额", "备注"};
         Row headerRow = sheet.createRow(0);
         for (int i = 0; i < headers.length; i++) {
             Cell cell = headerRow.createCell(i);
@@ -282,11 +282,11 @@ public class ReportServiceImpl implements ReportService {
             Row row = sheet.createRow(rowNum++);
             row.createCell(0).setCellValue(DateUtils.formatDate(item.getDate()));
             row.createCell(1).setCellValue(ExpenseType.getName(item.getReceiptType()));
-            row.createCell(2).setCellValue(item.getReceiptFile() != null ? item.getReceiptFile() : "");
-            row.createCell(3).setCellValue(item.getSummary() != null ? item.getSummary() : "");
-            row.createCell(4).setCellValue(item.getAmount().doubleValue());
-            row.createCell(5).setCellValue(item.getRemark() != null ? item.getRemark() : "");
-            row.createCell(6).setCellValue(item.getHasReceipt() != null && item.getHasReceipt() == 1 ? "有" : "无");
+            row.createCell(2).setCellValue(ExpenseType.getExpenseTypeName(item.getExpenseType()));
+            row.createCell(3).setCellValue(item.getReceiptFile() != null ? item.getReceiptFile() : "");
+            row.createCell(4).setCellValue(item.getSummary() != null ? item.getSummary() : "");
+            row.createCell(5).setCellValue(item.getAmount() != null ? item.getAmount().doubleValue() : 0.0);
+            row.createCell(6).setCellValue(item.getRemark() != null ? item.getRemark() : "");
             for (int i = 0; i < 7; i++) {
                 row.getCell(i).setCellStyle(dataStyle);
             }

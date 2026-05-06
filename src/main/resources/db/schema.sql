@@ -88,7 +88,8 @@ CREATE TABLE IF NOT EXISTS t_report_item (
   id               BIGINT PRIMARY KEY AUTO_INCREMENT,
   project_id       BIGINT NOT NULL COMMENT '所属项目ID',
   date             DATE NOT NULL COMMENT '报销日期',
-  receipt_type     VARCHAR(50) NOT NULL COMMENT '凭证类型: transport/catering/accommodation/purchase',
+  receipt_type     VARCHAR(50) NOT NULL COMMENT '票据类型: 发票/截图',
+  expense_type     VARCHAR(50) NOT NULL COMMENT '消费类型: transport/catering/accommodation/purchase',
   summary          VARCHAR(500) COMMENT '摘要',
   amount           DECIMAL(12,2) NOT NULL COMMENT '金额',
   remark           VARCHAR(500) COMMENT '备注',
@@ -134,6 +135,10 @@ INSERT INTO t_settings (setting_key, setting_value, description) VALUES
   ('screenshot_max_size', '5', '截图单文件大小上限(MB)'),
   ('attachment_max_size', '20', '附件单文件大小上限(MB)');
 
+ALTER TABLE t_report_item
+    ADD COLUMN expense_type VARCHAR(50) NOT NULL DEFAULT 'transport'
+        COMMENT '消费类型: transport/catering/accommodation/purchase'
+        AFTER receipt_type;
 -- =============================================
 -- 数据库升级 ALTER 语句（用于已有数据库升级）
 -- =============================================
@@ -149,6 +154,9 @@ INSERT INTO t_settings (setting_key, setting_value, description) VALUES
 
 -- t_report_item: has_receipt 改为 NOT NULL
 -- ALTER TABLE t_report_item MODIFY COLUMN has_receipt TINYINT NOT NULL DEFAULT 1 COMMENT '是否有票据: 0-无 1-有';
+
+-- t_report_item: 添加 expense_type（消费类型）字段
+-- ALTER TABLE t_report_item ADD COLUMN expense_type VARCHAR(50) NOT NULL DEFAULT 'transport' COMMENT '消费类型: transport/catering/accommodation/purchase' AFTER receipt_type;
 
 -- 创建批量识别任务表
 -- CREATE TABLE IF NOT EXISTS t_batch_recognize_task (

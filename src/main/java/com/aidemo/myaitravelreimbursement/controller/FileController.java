@@ -111,6 +111,12 @@ public class FileController {
         return Result.success(fileStorageService.batchConfirm(projectId, fileIds));
     }
 
+    @Operation(summary = "取消确认")
+    @PatchMapping("/{fileId}/unconfirm")
+    public Result<FileVO> unconfirmFile(@PathVariable Long fileId) {
+        return Result.success(fileStorageService.unconfirmFile(fileId));
+    }
+
     @Operation(summary = "下载文件")
     @GetMapping("/{fileId}/download")
     public void download(@PathVariable Long fileId, HttpServletResponse response) throws IOException {
