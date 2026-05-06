@@ -34,10 +34,23 @@ public class SettingsServiceImpl implements SettingsService {
         }
 
         SettingsVO vo = new SettingsVO();
-        vo.setAppName(map.getOrDefault("app_name", "差旅报销助手"));
-        vo.setAutoRecognize(Boolean.parseBoolean(map.getOrDefault("auto_recognize", "false")));
+        vo.setAppName(map.getOrDefault("app_name", "出差报销AI助手"));
+        vo.setAutoRecognize(Boolean.parseBoolean(map.getOrDefault("auto_recognize", "true")));
         vo.setAutoArchive(Boolean.parseBoolean(map.getOrDefault("auto_archive", "true")));
+        vo.setNotifications(Boolean.parseBoolean(map.getOrDefault("notifications", "true")));
+        vo.setInvoiceMaxSize(parseIntOrDefault(map.get("invoice_max_size"), 10));
+        vo.setScreenshotMaxSize(parseIntOrDefault(map.get("screenshot_max_size"), 5));
+        vo.setAttachmentMaxSize(parseIntOrDefault(map.get("attachment_max_size"), 20));
         return vo;
+    }
+
+    private int parseIntOrDefault(String value, int defaultValue) {
+        if (value == null || value.isEmpty()) return defaultValue;
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 
     @Override
@@ -51,6 +64,9 @@ public class SettingsServiceImpl implements SettingsService {
         }
         if (dto.getAutoArchive() != null) {
             upsertSetting("auto_archive", String.valueOf(dto.getAutoArchive()), "识别后自动归档");
+        }
+        if (dto.getNotifications() != null) {
+            upsertSetting("notifications", String.valueOf(dto.getNotifications()), "消息通知");
         }
         return getSettings();
     }

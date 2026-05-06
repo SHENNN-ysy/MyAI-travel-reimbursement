@@ -16,9 +16,9 @@ CREATE TABLE IF NOT EXISTS t_project (
   reason       VARCHAR(500) COMMENT '出差事由',
   person       VARCHAR(50) COMMENT '出差人',
   department   VARCHAR(100) COMMENT '部门',
-  budget       DECIMAL(12,2) COMMENT '预算金额',
+  budget       VARCHAR(100) COMMENT '预算项目名称（文本）',
   remark       VARCHAR(500) COMMENT '备注',
-  status       TINYINT DEFAULT 0 COMMENT '状态: 0-草稿 1-进行中 2-已完成',
+  status       TINYINT DEFAULT 0 COMMENT '状态: 0-待处理 1-已完成',
   deleted      TINYINT DEFAULT 0 COMMENT '逻辑删除: 0-未删除 1-已删除',
   created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS t_folder (
   id         BIGINT PRIMARY KEY AUTO_INCREMENT,
   project_id BIGINT NOT NULL COMMENT '所属项目ID',
   name       VARCHAR(100) NOT NULL COMMENT '文件夹名称',
+  type       VARCHAR(20) COMMENT '文件夹类型: invoice/screenshot/attachment',
   parent_id  BIGINT DEFAULT 0 COMMENT '父文件夹ID, 0表示根目录',
   sort_order INT DEFAULT 0 COMMENT '排序',
   deleted    TINYINT DEFAULT 0 COMMENT '逻辑删除',
@@ -91,7 +92,8 @@ CREATE TABLE IF NOT EXISTS t_report_item (
   summary          VARCHAR(500) COMMENT '摘要',
   amount           DECIMAL(12,2) NOT NULL COMMENT '金额',
   remark           VARCHAR(500) COMMENT '备注',
-  has_receipt      TINYINT DEFAULT 1 COMMENT '是否有票据: 0-无 1-有',
+  has_receipt      TINYINT NOT NULL DEFAULT 1 COMMENT '是否有票据: 0-无 1-有',
+  receipt_file     VARCHAR(200) NOT NULL COMMENT '票据文件名',
   receipt_file_id  BIGINT COMMENT '关联票据文件ID',
   deleted          TINYINT DEFAULT 0 COMMENT '逻辑删除',
   created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -99,6 +101,19 @@ CREATE TABLE IF NOT EXISTS t_report_item (
   FOREIGN KEY (project_id) REFERENCES t_project(id) ON DELETE CASCADE,
   FOREIGN KEY (receipt_file_id) REFERENCES t_upload_file(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='报表明细表';
+
+-- 5.1 批量识别任务表
+CREATE TABLE IF NOT EXISTS t_batch_recognize_task (
+  id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+  task_id     VARCHAR(64) NOT NULL UNIQUE COMMENT '任务ID(UUID)',
+  project_id  BIGINT NOT NULL COMMENT '所属项目ID',
+  status      VARCHAR(20) DEFAULT 'pending' COMMENT '任务状态: pending/processing/completed/failed',
+  total       INT DEFAULT 0 COMMENT '总任务数',
+  processed   INT DEFAULT 0 COMMENT '已处理数',
+  error_msg   TEXT COMMENT '错误信息',
+  created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='批量识别任务表';
 
 -- 6. 全局设置表
 CREATE TABLE IF NOT EXISTS t_settings (
@@ -111,6 +126,39 @@ CREATE TABLE IF NOT EXISTS t_settings (
 
 -- 初始化默认设置
 INSERT INTO t_settings (setting_key, setting_value, description) VALUES
-  ('app_name', '差旅报销助手', '应用名称'),
+  ('app_name', '出差报销AI助手', '应用名称'),
   ('auto_recognize', 'false', '上传后自动识别'),
-  ('auto_archive', 'true', '识别后自动归档');
+  ('auto_archive', 'false', '识别后自动归档'),
+  ('notifications', 'true', '消息通知'),
+  ('invoice_max_size', '10', '发票单文件大小上限(MB)'),
+  ('screenshot_max_size', '5', '截图单文件大小上限(MB)'),
+  ('attachment_max_size', '20', '附件单文件大小上限(MB)');
+
+-- =============================================
+-- 数据库升级 ALTER 语句（用于已有数据库升级）
+-- =============================================
+
+-- t_project: budget 从 DECIMAL 改为 VARCHAR
+-- ALTER TABLE t_project MODIFY COLUMN budget VARCHAR(100) COMMENT '预算项目名称（文本）';
+
+-- t_folder: 添加 type 字段
+-- ALTER TABLE t_folder ADD COLUMN type VARCHAR(20) COMMENT '文件夹类型: invoice/screenshot/attachment' AFTER name;
+
+-- t_report_item: 添加 receipt_file 字段
+-- ALTER TABLE t_report_item ADD COLUMN receipt_file VARCHAR(200) NOT NULL DEFAULT '' COMMENT '票据文件名' AFTER has_receipt;
+
+-- t_report_item: has_receipt 改为 NOT NULL
+-- ALTER TABLE t_report_item MODIFY COLUMN has_receipt TINYINT NOT NULL DEFAULT 1 COMMENT '是否有票据: 0-无 1-有';
+
+-- 创建批量识别任务表
+-- CREATE TABLE IF NOT EXISTS t_batch_recognize_task (
+--   id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+--   task_id     VARCHAR(64) NOT NULL UNIQUE,
+--   project_id  BIGINT NOT NULL,
+--   status      VARCHAR(20) DEFAULT 'pending',
+--   total       INT DEFAULT 0,
+--   processed   INT DEFAULT 0,
+--   error_msg   TEXT,
+--   created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+--   updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+-- );

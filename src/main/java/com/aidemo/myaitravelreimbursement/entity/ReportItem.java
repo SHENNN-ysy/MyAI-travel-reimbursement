@@ -30,6 +30,8 @@ public class ReportItem {
 
     private Integer hasReceipt;
 
+    private String receiptFile;
+
     private Long receiptFileId;
 
     @TableLogic

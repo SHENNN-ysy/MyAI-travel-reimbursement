@@ -1,20 +1,23 @@
 package com.aidemo.myaitravelreimbursement.controller;
 
 import com.aidemo.myaitravelreimbursement.common.ErrorCode;
+import com.aidemo.myaitravelreimbursement.common.PageResult;
 import com.aidemo.myaitravelreimbursement.common.Result;
+import com.aidemo.myaitravelreimbursement.dto.request.BatchRecognizeRequestDTO;
 import com.aidemo.myaitravelreimbursement.dto.request.FileUpdateDTO;
+import com.aidemo.myaitravelreimbursement.dto.response.BatchRecognizeTaskVO;
 import com.aidemo.myaitravelreimbursement.dto.response.FileVO;
 import com.aidemo.myaitravelreimbursement.dto.response.RecognitionResultVO;
 import com.aidemo.myaitravelreimbursement.entity.UploadFile;
 import com.aidemo.myaitravelreimbursement.mapper.UploadFileMapper;
 import com.aidemo.myaitravelreimbursement.service.AiRecognitionService;
+import com.aidemo.myaitravelreimbursement.service.BatchRecognizeService;
 import com.aidemo.myaitravelreimbursement.service.FileStorageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -33,6 +36,7 @@ public class FileController {
     private final FileStorageService fileStorageService;
     private final UploadFileMapper uploadFileMapper;
     private final AiRecognitionService aiRecognitionService;
+    private final BatchRecognizeService batchRecognizeService;
 
     @Operation(summary = "上传文件")
     @PostMapping("/upload")
@@ -42,6 +46,17 @@ public class FileController {
             @RequestParam(defaultValue = "attachment") String type,
             @RequestParam("file") MultipartFile file) throws IOException {
         return Result.success(fileStorageService.upload(projectId, folderId, type, file));
+    }
+
+    @Operation(summary = "获取文件列表")
+    @GetMapping
+    public Result<PageResult<FileVO>> listFiles(
+            @PathVariable Long projectId,
+            @RequestParam(defaultValue = "1") int current,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String expenseType) {
+        return Result.success(fileStorageService.listFiles(projectId, current, size, type, expenseType));
     }
 
     @Operation(summary = "获取文件信息")
@@ -74,12 +89,18 @@ public class FileController {
         return Result.success(aiRecognitionService.recognize(fileId, type));
     }
 
-    @Operation(summary = "批量识别")
+    @Operation(summary = "批量识别（异步任务模式）")
     @PostMapping("/batch/recognize")
-    public Result<List<FileVO>> batchRecognize(
+    public Result<BatchRecognizeTaskVO> submitBatchRecognize(
             @PathVariable Long projectId,
-            @RequestBody List<Long> fileIds) {
-        return Result.success(fileStorageService.batchRecognize(projectId, fileIds));
+            @RequestBody BatchRecognizeRequestDTO dto) {
+        return Result.success(batchRecognizeService.submitTask(projectId, dto.getFileIds()));
+    }
+
+    @Operation(summary = "查询批量识别任务进度")
+    @GetMapping("/batch/recognize/{taskId}/progress")
+    public Result<BatchRecognizeTaskVO> getTaskProgress(@PathVariable String taskId) {
+        return Result.success(batchRecognizeService.getTaskProgress(taskId));
     }
 
     @Operation(summary = "批量确认")

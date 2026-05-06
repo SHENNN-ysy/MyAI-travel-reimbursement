@@ -30,7 +30,7 @@ public class Project {
 
     private String department;
 
-    private BigDecimal budget;
+    private String budget;
 
     private String remark;
 

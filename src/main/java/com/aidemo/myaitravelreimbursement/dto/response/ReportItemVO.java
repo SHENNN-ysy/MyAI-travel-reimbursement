@@ -22,6 +22,7 @@ public class ReportItemVO {
     private BigDecimal amount;
     private String remark;
     private Integer hasReceipt;
+    private String receiptFile;
     private Long receiptFileId;
     private String receiptFileName;
     private LocalDateTime createdAt;
@@ -38,6 +39,7 @@ public class ReportItemVO {
         vo.setAmount(item.getAmount());
         vo.setRemark(item.getRemark());
         vo.setHasReceipt(item.getHasReceipt());
+        vo.setReceiptFile(item.getReceiptFile());
         vo.setReceiptFileId(item.getReceiptFileId());
         vo.setCreatedAt(item.getCreatedAt());
         vo.setUpdatedAt(item.getUpdatedAt());

@@ -11,6 +11,9 @@ public class ExpenseType {
     public static final String PURCHASE = "purchase";
 
     public static String getName(String type) {
+        if (type == null) {
+            return "其他";
+        }
         return switch (type) {
             case TRANSPORT -> "交通";
             case CATERING -> "餐饮";

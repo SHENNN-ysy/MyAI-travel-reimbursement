@@ -34,11 +34,11 @@ storage:
   base-path: D:/myAI-tool/travel-files
   allowed-extensions: pdf,jpg,jpeg,png,heic,gif,webp
 
-# AI 大模型配置（请替换为实际的 API Key）
+# AI 大模型配置（KIMI）
 ai:
-  base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-  api-key: ${AI_API_KEY:your-api-key-here}
-  model: qwen-vl-max
+  base-url: https://api.moonshot.cn/v1
+  api-key: sk-FBn2jGPgWM6gkp5xN9fptC7TDkwqXzzzy4pq7v7eOsvAsl8K
+  model: moonshot-v1-8k-vision-preview
   timeout: 60
 
 # Knife4j 配置

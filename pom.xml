@@ -31,6 +31,7 @@
         <mybatis-plus.version>3.5.7</mybatis-plus.version>
         <easyexcel.version>4.0.3</easyexcel.version>
         <knife4j.version>4.5.0</knife4j.version>
+        <springdoc.version>2.8.8</springdoc.version>
         <okhttp.version>4.12.0</okhttp.version>
     </properties>
     <dependencies>
@@ -67,11 +68,41 @@
             <version>${easyexcel.version}</version>
         </dependency>
 
-        <!-- Knife4j (Swagger UI) -->
+        <!-- Knife4j: exclude bundled springdoc 2.3.0 (incompatible with Spring 6.2.x), override with springdoc 2.8.8 -->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>
             <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
             <version>${knife4j.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springdoc</groupId>
+                    <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springdoc</groupId>
+                    <artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springdoc</groupId>
+                    <artifactId>springdoc-openapi-starter-common</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- springdoc 2.8.8: compatible with Spring Framework 6.2.x -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-common</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
         </dependency>
 
         <!-- OkHttp for AI API calls -->

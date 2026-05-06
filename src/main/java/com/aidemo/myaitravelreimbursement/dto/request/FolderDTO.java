@@ -14,6 +14,8 @@ public class FolderDTO {
     @Size(max = 100, message = "文件夹名称不能超过100字符")
     private String name;
 
+    private String type;
+
     private Long parentId;
 
     private Integer sortOrder;

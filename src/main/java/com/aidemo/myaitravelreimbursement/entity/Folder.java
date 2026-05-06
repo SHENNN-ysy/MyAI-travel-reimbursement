@@ -20,6 +20,8 @@ public class Folder {
 
     private Long parentId;
 
+    private String type;
+
     private Integer sortOrder;
 
     @TableLogic

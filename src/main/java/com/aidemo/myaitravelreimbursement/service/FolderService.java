@@ -17,4 +17,6 @@ public interface FolderService {
     FolderVO update(Long id, FolderDTO dto);
 
     void delete(Long id);
+
+    void deleteByProjectId(Long projectId);
 }

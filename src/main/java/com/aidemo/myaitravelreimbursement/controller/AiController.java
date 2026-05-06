@@ -3,15 +3,10 @@ package com.aidemo.myaitravelreimbursement.controller;
 import com.aidemo.myaitravelreimbursement.common.Result;
 import com.aidemo.myaitravelreimbursement.dto.response.RecognitionResultVO;
 import com.aidemo.myaitravelreimbursement.service.AiRecognitionService;
-import com.aidemo.myaitravelreimbursement.service.FileStorageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.io.IOException;
-import java.util.List;
 
 /**
  * AI 识别控制器
@@ -21,9 +16,8 @@ import java.util.List;
 @RequestMapping("/ai")
 @RequiredArgsConstructor
 public class AiController {
-
+ 
     private final AiRecognitionService aiRecognitionService;
-    private final FileStorageService fileStorageService;
 
     @Operation(summary = "自动识别文件")
     @PostMapping("/recognize/auto")

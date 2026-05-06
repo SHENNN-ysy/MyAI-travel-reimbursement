@@ -22,14 +22,18 @@ public class ProjectDetailVO {
     private String reason;
     private String person;
     private String department;
-    private BigDecimal budget;
+    private String budget;
     private String remark;
     private Integer status;
     private String statusName;
+    private BigDecimal totalAmount;
+    private Long fileCount;
+    private Long confirmedCount;
+    private Long unconfirmedCount;
+    private FolderStructureVO folderStructure;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<FolderVO> folders;
-    private List<FileVO> files;
 
     public static ProjectDetailVO fromEntity(Project project) {
         ProjectDetailVO vo = new ProjectDetailVO();
@@ -48,5 +52,10 @@ public class ProjectDetailVO {
         vo.setCreatedAt(project.getCreatedAt());
         vo.setUpdatedAt(project.getUpdatedAt());
         return vo;
+    }
+
+    @Data
+    public static class FolderStructureVO {
+        private List<FolderVO> folders;
     }
 }

@@ -17,6 +17,8 @@ public class FolderVO {
     private String name;
     private Long parentId;
     private Integer sortOrder;
+    private String type;
+    private Long fileCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<FolderVO> children = new ArrayList<>();
@@ -28,6 +30,7 @@ public class FolderVO {
         vo.setName(folder.getName());
         vo.setParentId(folder.getParentId());
         vo.setSortOrder(folder.getSortOrder());
+        vo.setType(folder.getType());
         vo.setCreatedAt(folder.getCreatedAt());
         vo.setUpdatedAt(folder.getUpdatedAt());
         return vo;

@@ -39,7 +39,9 @@ public class ProjectController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String name,
             @RequestParam(required = false) Integer status) {
-        Map<String, Object> params = Map.of("name", name != null ? name : "", "status", status);
+        Map<String, Object> params = new java.util.HashMap<>();
+        params.put("name", name != null ? name : "");
+        params.put("status", status);
         return Result.success(projectService.page(current, size, params));
     }
 

@@ -23,6 +23,7 @@ public class ReportSummaryVO {
     private Long accommodationCount;
     private Long purchaseCount;
     private BigDecimal budget;
+    private String budgetName;
     private BigDecimal budgetUsed;
     private BigDecimal budgetRemaining;
 }

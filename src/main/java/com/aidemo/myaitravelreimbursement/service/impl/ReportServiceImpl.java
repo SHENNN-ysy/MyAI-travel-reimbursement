@@ -87,6 +87,7 @@ public class ReportServiceImpl implements ReportService {
         item.setAmount(dto.getAmount());
         item.setRemark(dto.getRemark());
         item.setHasReceipt(dto.getHasReceipt() != null ? dto.getHasReceipt() : 1);
+        item.setReceiptFile(dto.getReceiptFile());
         item.setReceiptFileId(dto.getReceiptFileId());
         reportItemMapper.insert(item);
         return convertToVO(item);
@@ -105,6 +106,7 @@ public class ReportServiceImpl implements ReportService {
         if (dto.getAmount() != null) item.setAmount(dto.getAmount());
         if (dto.getRemark() != null) item.setRemark(dto.getRemark());
         if (dto.getHasReceipt() != null) item.setHasReceipt(dto.getHasReceipt());
+        if (dto.getReceiptFile() != null) item.setReceiptFile(dto.getReceiptFile());
         if (dto.getReceiptFileId() != null) item.setReceiptFileId(dto.getReceiptFileId());
         reportItemMapper.updateById(item);
         return convertToVO(item);
@@ -133,7 +135,7 @@ public class ReportServiceImpl implements ReportService {
         ReportSummaryVO vo = new ReportSummaryVO();
         vo.setProjectId(projectId);
         vo.setProjectName(project.getName());
-        vo.setBudget(project.getBudget());
+        vo.setBudgetName(project.getBudget());
 
         BigDecimal total = BigDecimal.ZERO;
         BigDecimal transport = BigDecimal.ZERO;
@@ -162,9 +164,13 @@ public class ReportServiceImpl implements ReportService {
         vo.setAccommodationCount(items.stream().filter(i -> ExpenseType.ACCOMMODATION.equals(i.getReceiptType())).count());
         vo.setPurchaseCount(items.stream().filter(i -> ExpenseType.PURCHASE.equals(i.getReceiptType())).count());
 
-        if (project.getBudget() != null) {
-            vo.setBudgetUsed(total);
-            vo.setBudgetRemaining(project.getBudget().subtract(total));
+        if (project.getBudget() != null && total != null) {
+            try {
+                BigDecimal budgetNum = new BigDecimal(project.getBudget());
+                vo.setBudgetUsed(total);
+                vo.setBudgetRemaining(budgetNum.subtract(total));
+            } catch (NumberFormatException ignored) {
+            }
         }
 
         return vo;
@@ -232,7 +238,7 @@ public class ReportServiceImpl implements ReportService {
 
     private void createSummarySheet(Sheet sheet, CellStyle headerStyle, CellStyle dataStyle,
                                     Project project, ReportSummaryVO summary) {
-        String[] headers = {"项目名称", "出差人", "部门", "出差日期", "总金额", "交通费", "餐饮费", "住宿费", "采购费", "预算", "预算使用"};
+        String[] headers = {"项目名称", "出差人", "部门", "出差日期", "总金额", "交通费", "餐饮费", "住宿费", "采购费", "预算项目", "预算使用"};
         Row headerRow = sheet.createRow(0);
         for (int i = 0; i < headers.length; i++) {
             Cell cell = headerRow.createCell(i);
@@ -253,7 +259,7 @@ public class ReportServiceImpl implements ReportService {
         dataRow.createCell(6).setCellValue(summary.getCateringAmount() != null ? summary.getCateringAmount().doubleValue() : 0.0);
         dataRow.createCell(7).setCellValue(summary.getAccommodationAmount() != null ? summary.getAccommodationAmount().doubleValue() : 0.0);
         dataRow.createCell(8).setCellValue(summary.getPurchaseAmount() != null ? summary.getPurchaseAmount().doubleValue() : 0.0);
-        dataRow.createCell(9).setCellValue(summary.getBudget() != null ? summary.getBudget().doubleValue() : 0.0);
+        dataRow.createCell(9).setCellValue(summary.getBudgetName() != null ? summary.getBudgetName() : "");
         dataRow.createCell(10).setCellValue(summary.getBudgetUsed() != null ? summary.getBudgetUsed().doubleValue() : 0.0);
 
         for (int i = 0; i <= 10; i++) {
@@ -262,7 +268,7 @@ public class ReportServiceImpl implements ReportService {
     }
 
     private void createDetailSheet(Sheet sheet, CellStyle headerStyle, CellStyle dataStyle, List<ReportItem> items) {
-        String[] headers = {"日期", "凭证类型", "摘要", "金额", "备注", "有无票据"};
+        String[] headers = {"日期", "凭证类型", "票据文件", "摘要", "金额", "备注", "有无票据"};
         Row headerRow = sheet.createRow(0);
         for (int i = 0; i < headers.length; i++) {
             Cell cell = headerRow.createCell(i);
@@ -276,11 +282,12 @@ public class ReportServiceImpl implements ReportService {
             Row row = sheet.createRow(rowNum++);
             row.createCell(0).setCellValue(DateUtils.formatDate(item.getDate()));
             row.createCell(1).setCellValue(ExpenseType.getName(item.getReceiptType()));
-            row.createCell(2).setCellValue(item.getSummary() != null ? item.getSummary() : "");
-            row.createCell(3).setCellValue(item.getAmount().doubleValue());
-            row.createCell(4).setCellValue(item.getRemark() != null ? item.getRemark() : "");
-            row.createCell(5).setCellValue(item.getHasReceipt() != null && item.getHasReceipt() == 1 ? "有" : "无");
-            for (int i = 0; i < 6; i++) {
+            row.createCell(2).setCellValue(item.getReceiptFile() != null ? item.getReceiptFile() : "");
+            row.createCell(3).setCellValue(item.getSummary() != null ? item.getSummary() : "");
+            row.createCell(4).setCellValue(item.getAmount().doubleValue());
+            row.createCell(5).setCellValue(item.getRemark() != null ? item.getRemark() : "");
+            row.createCell(6).setCellValue(item.getHasReceipt() != null && item.getHasReceipt() == 1 ? "有" : "无");
+            for (int i = 0; i < 7; i++) {
                 row.getCell(i).setCellStyle(dataStyle);
             }
         }
@@ -329,6 +336,8 @@ public class ReportServiceImpl implements ReportService {
             if (file != null) {
                 vo.setReceiptFileName(file.getOriginalName());
             }
+        } else if (item.getReceiptFile() != null) {
+            vo.setReceiptFileName(item.getReceiptFile());
         }
         return vo;
     }

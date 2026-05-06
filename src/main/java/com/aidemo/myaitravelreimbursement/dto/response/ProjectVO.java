@@ -22,7 +22,7 @@ public class ProjectVO {
     private String reason;
     private String person;
     private String department;
-    private BigDecimal budget;
+    private String budget;
     private String remark;
     private Integer status;
     private String statusName;

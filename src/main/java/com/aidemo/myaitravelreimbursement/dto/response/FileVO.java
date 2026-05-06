@@ -2,6 +2,7 @@ package com.aidemo.myaitravelreimbursement.dto.response;
 
 import com.aidemo.myaitravelreimbursement.constant.FileStatus;
 import com.aidemo.myaitravelreimbursement.constant.FileType;
+import com.aidemo.myaitravelreimbursement.entity.RecognitionResult;
 import com.aidemo.myaitravelreimbursement.entity.UploadFile;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -30,7 +31,17 @@ public class FileVO {
     private LocalDateTime updatedAt;
     private RecognitionResultVO recognitionResult;
 
+    /**
+     * 基础转换（不带识别结果）
+     */
     public static FileVO fromEntity(UploadFile file) {
+        return fromEntity(file, null);
+    }
+
+    /**
+     * 完整转换（带识别结果）
+     */
+    public static FileVO fromEntity(UploadFile file, RecognitionResult result) {
         FileVO vo = new FileVO();
         vo.setId(file.getId());
         vo.setProjectId(file.getProjectId());
@@ -48,6 +59,9 @@ public class FileVO {
         vo.setConfirmed(file.getConfirmed());
         vo.setCreatedAt(file.getCreatedAt());
         vo.setUpdatedAt(file.getUpdatedAt());
+        if (result != null) {
+            vo.setRecognitionResult(RecognitionResultVO.fromEntity(result));
+        }
         return vo;
     }
 

@@ -11,4 +11,8 @@ public class SettingsVO {
     private String appName;
     private Boolean autoRecognize;
     private Boolean autoArchive;
+    private Boolean notifications;
+    private Integer invoiceMaxSize;
+    private Integer screenshotMaxSize;
+    private Integer attachmentMaxSize;
 }
