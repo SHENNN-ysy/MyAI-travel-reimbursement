@@ -38,7 +38,11 @@ public enum ErrorCode {
     AI_API_ERROR(702, "AI服务调用失败"),
 
     // Excel 导出相关
-    EXPORT_ERROR(801, "导出失败");
+    EXPORT_ERROR(801, "导出失败"),
+
+    // Agent 相关
+    AGENT_ERROR(901, "Agent执行异常"),
+    AGENT_SESSION_NOT_FOUND(902, "会话不存在");
 
     private final int code;
     private final String message;

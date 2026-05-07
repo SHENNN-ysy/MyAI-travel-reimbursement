@@ -139,6 +139,33 @@ ALTER TABLE t_report_item
     ADD COLUMN expense_type VARCHAR(50) NOT NULL DEFAULT 'transport'
         COMMENT '消费类型: transport/catering/accommodation/purchase'
         AFTER receipt_type;
+-- 创建 Agent 会话表
+CREATE TABLE IF NOT EXISTS t_agent_session (
+  id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+  project_id      BIGINT NOT NULL COMMENT '所属项目ID',
+  session_id      VARCHAR(64) NOT NULL UNIQUE COMMENT '会话唯一ID（UUID）',
+  user_id         VARCHAR(100) COMMENT '用户标识',
+  status          TINYINT DEFAULT 0 COMMENT '0-活跃 1-已完成',
+  last_message    VARCHAR(500) COMMENT '最后一条用户消息摘要',
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (project_id) REFERENCES t_project(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Agent会话表';
+
+-- 创建 Agent 任务执行日志表
+CREATE TABLE IF NOT EXISTS t_agent_task_log (
+  id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+  session_id      VARCHAR(64) NOT NULL COMMENT '会话ID',
+  step_order      INT COMMENT '执行步骤序号',
+  tool_name       VARCHAR(100) COMMENT '工具名称',
+  tool_input      TEXT COMMENT '工具输入参数',
+  tool_output     TEXT COMMENT '工具输出结果',
+  execution_time  INT COMMENT '执行耗时(ms)',
+  result_status   TINYINT COMMENT '0-成功 1-失败',
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_session_id (session_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Agent任务执行日志表';
+
 -- =============================================
 -- 数据库升级 ALTER 语句（用于已有数据库升级）
 -- =============================================
