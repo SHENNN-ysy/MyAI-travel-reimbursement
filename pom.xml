@@ -6,7 +6,7 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>3.5.14</version>
-        <relativePath/> <!-- lookup parent from repository -->
+        <relativePath/>
     </parent>
     <groupId>com.ai-demo</groupId>
     <artifactId>MyAI-travel-reimbursement</artifactId>
@@ -33,7 +33,22 @@
         <knife4j.version>4.5.0</knife4j.version>
         <springdoc.version>2.8.8</springdoc.version>
         <okhttp.version>4.12.0</okhttp.version>
+        <langchain4j.version>1.13.0</langchain4j.version>
     </properties>
+
+    <repositories>
+        <repository>
+            <id>central</id>
+            <name>Maven Central</name>
+            <url>https://repo1.maven.org/maven2</url>
+        </repository>
+        <repository>
+            <id>aliyun</id>
+            <name>Aliyun Mirror</name>
+            <url>https://maven.aliyun.com/repository/public</url>
+        </repository>
+    </repositories>
+
     <dependencies>
         <!-- Spring Boot Web -->
         <dependency>
@@ -110,6 +125,20 @@
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
             <version>${okhttp.version}</version>
+        </dependency>
+
+        <!-- LangChain4j Core -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+
+        <!-- LangChain4j OpenAI (supports DashScope/Moonshot/Kimi OpenAI-compatible APIs) -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai</artifactId>
+            <version>${langchain4j.version}</version>
         </dependency>
 
         <!-- Jackson -->

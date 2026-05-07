@@ -34,12 +34,16 @@ storage:
   base-path: D:/myAI-tool/travel-files
   allowed-extensions: pdf,jpg,jpeg,png,heic,gif,webp
 
-# AI 大模型配置（KIMI）
+# AI 大模型配置
 ai:
+  # Provider: langchain4j (默认) | okhttp
+  provider: langchain4j
   base-url: https://api.moonshot.cn/v1
   api-key: sk-FBn2jGPgWM6gkp5xN9fptC7TDkwqXzzzy4pq7v7eOsvAsl8K
   model: moonshot-v1-8k-vision-preview
   timeout: 60
+  temperature: 0.7
+  max-retries: 3
 
 # Knife4j 配置
 knife4j:

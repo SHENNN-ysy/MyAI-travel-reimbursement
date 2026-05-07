@@ -2,7 +2,7 @@ package com.aidemo.myaitravelreimbursement.service.impl;
 
 import com.aidemo.myaitravelreimbursement.common.BusinessException;
 import com.aidemo.myaitravelreimbursement.common.ErrorCode;
-import com.aidemo.myaitravelreimbursement.config.AiConfig;
+import com.aidemo.myaitravelreimbursement.config.AiProperties;
 import com.aidemo.myaitravelreimbursement.config.StorageConfig;
 import com.aidemo.myaitravelreimbursement.constant.FileStatus;
 import com.aidemo.myaitravelreimbursement.dto.response.RecognitionResultVO;
@@ -11,13 +11,13 @@ import com.aidemo.myaitravelreimbursement.entity.UploadFile;
 import com.aidemo.myaitravelreimbursement.mapper.RecognitionResultMapper;
 import com.aidemo.myaitravelreimbursement.mapper.UploadFileMapper;
 import com.aidemo.myaitravelreimbursement.service.AiRecognitionService;
-import com.aidemo.myaitravelreimbursement.util.DateUtils;
-import com.aidemo.myaitravelreimbursement.util.JsonUtils;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,11 +35,12 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "ai.provider", havingValue = "okhttp")
 public class AiRecognitionServiceImpl implements AiRecognitionService {
 
     private final UploadFileMapper uploadFileMapper;
     private final RecognitionResultMapper recognitionResultMapper;
-    private final AiConfig aiConfig;
+    private final AiProperties aiProperties;
     private final StorageConfig storageConfig;
     private final ObjectMapper objectMapper;
 
@@ -69,9 +70,17 @@ public class AiRecognitionServiceImpl implements AiRecognitionService {
             JsonNode result = callAiApi(base64Image, prompt);
 
             RecognitionResult rr = parseRecognitionResult(result, file, type);
-            recognitionResultMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<RecognitionResult>()
-                    .eq(RecognitionResult::getFileId, fileId));
-            recognitionResultMapper.insert(rr);
+
+            // 根据 fileId 查询是否存在记录，存在则更新，不存在则插入
+            LambdaQueryWrapper<RecognitionResult> queryWrapper = new LambdaQueryWrapper<RecognitionResult>()
+                    .eq(RecognitionResult::getFileId, fileId);
+            RecognitionResult existing = recognitionResultMapper.selectOne(queryWrapper);
+            if (existing != null) {
+                rr.setId(existing.getId());
+                recognitionResultMapper.updateById(rr);
+            } else {
+                recognitionResultMapper.insert(rr);
+            }
 
             file.setStatus(FileStatus.SUCCESS);
             uploadFileMapper.updateById(file);
@@ -126,9 +135,9 @@ public class AiRecognitionServiceImpl implements AiRecognitionService {
 
     private JsonNode callAiApi(String base64Image, String prompt) throws IOException {
         OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(aiConfig.getTimeout(), TimeUnit.SECONDS)
-                .writeTimeout(aiConfig.getTimeout(), TimeUnit.SECONDS)
-                .readTimeout(aiConfig.getTimeout(), TimeUnit.SECONDS)
+                .connectTimeout(aiProperties.getTimeout(), TimeUnit.SECONDS)
+                .writeTimeout(aiProperties.getTimeout(), TimeUnit.SECONDS)
+                .readTimeout(aiProperties.getTimeout(), TimeUnit.SECONDS)
                 .build();
 
         String jsonBody = String.format("""
@@ -144,11 +153,11 @@ public class AiRecognitionServiceImpl implements AiRecognitionService {
                     }
                 ]
             }
-            """, aiConfig.getModel(), prompt.replace("\"", "\\\""), base64Image);
+            """, aiProperties.getModel(), prompt.replace("\"", "\\\""), base64Image);
 
         Request request = new Request.Builder()
-                .url(aiConfig.getBaseUrl() + "/chat/completions")
-                .addHeader("Authorization", "Bearer " + aiConfig.getApiKey())
+                .url(aiProperties.getBaseUrl() + "/chat/completions")
+                .addHeader("Authorization", "Bearer " + aiProperties.getApiKey())
                 .addHeader("Content-Type", "application/json")
                 .post(RequestBody.create(jsonBody, JSON))
                 .build();

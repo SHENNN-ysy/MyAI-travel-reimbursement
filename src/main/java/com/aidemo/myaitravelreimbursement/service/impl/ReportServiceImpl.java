@@ -21,12 +21,18 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.math.BigDecimal;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -40,6 +46,9 @@ public class ReportServiceImpl implements ReportService {
     private final ReportItemMapper reportItemMapper;
     private final ProjectMapper projectMapper;
     private final UploadFileMapper uploadFileMapper;
+
+    @Value("${storage.base-path}")
+    private String storageBasePath;
 
     @Override
     public PageResult<ReportItemVO> pageItems(Long projectId, int current, int size, String receiptType) {
@@ -191,26 +200,137 @@ public class ReportServiceImpl implements ReportService {
                         .orderByAsc(ReportItem::getDate)
         );
 
+        // Sort by expense type: transport > accommodation > purchase > catering
+        List<ReportItem> sortedItems = items.stream()
+                .sorted(Comparator.comparingInt(item -> {
+                    String type = item.getExpenseType() != null ? item.getExpenseType() : "";
+                    return switch (type) {
+                        case "transport" -> 0;
+                        case "accommodation" -> 1;
+                        case "purchase" -> 2;
+                        case "catering" -> 3;
+                        default -> 4;
+                    };
+                }))
+                .toList();
+
         ReportSummaryVO summary = getSummary(projectId);
 
         try (Workbook workbook = new XSSFWorkbook()) {
             CellStyle headerStyle = createHeaderStyle(workbook);
             CellStyle dataStyle = createDataStyle(workbook);
+            CellStyle sectionTitleStyle = createSectionTitleStyle(workbook);
 
-            Sheet summarySheet = workbook.createSheet("汇总");
-            createSummarySheet(summarySheet, headerStyle, dataStyle, project, summary);
+            Sheet sheet = workbook.createSheet("报销单");
 
-            Sheet detailSheet = workbook.createSheet("明细");
-            createDetailSheet(detailSheet, headerStyle, dataStyle, items);
+            // Row 0: Section title "汇总信息"
+            Row section0 = sheet.createRow(0);
+            Cell section0Cell = section0.createCell(0);
+            section0Cell.setCellValue("【汇总信息】");
+            section0Cell.setCellStyle(sectionTitleStyle);
+            sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 7));
 
-            Sheet fileSheet = workbook.createSheet("凭证清单");
-            createFileSheet(fileSheet, headerStyle, dataStyle, projectId);
+            // Row 1: Summary headers (8 columns)
+            Row summaryHeader = sheet.createRow(1);
+            String[] summaryHeaders = {"项目名称", "出差人", "部门", "起始日期", "结束日期", "总天数", "总金额", "出差项目"};
+            for (int i = 0; i < summaryHeaders.length; i++) {
+                Cell cell = summaryHeader.createCell(i);
+                cell.setCellValue(summaryHeaders[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            // Row 2: Summary data
+            Row summaryData = sheet.createRow(2);
+            long totalDays = 0;
+            if (project.getStartDate() != null && project.getEndDate() != null) {
+                totalDays = ChronoUnit.DAYS.between(project.getStartDate(), project.getEndDate()) + 1;
+            }
+            summaryData.createCell(0).setCellValue(project.getName() != null ? project.getName() : "");
+            summaryData.createCell(1).setCellValue(project.getPerson() != null ? project.getPerson() : "");
+            summaryData.createCell(2).setCellValue(project.getDepartment() != null ? project.getDepartment() : "");
+            summaryData.createCell(3).setCellValue(project.getStartDate() != null ? DateUtils.formatDate(project.getStartDate()) : "");
+            summaryData.createCell(4).setCellValue(project.getEndDate() != null ? DateUtils.formatDate(project.getEndDate()) : "");
+            summaryData.createCell(5).setCellValue(totalDays);
+            summaryData.createCell(6).setCellValue(summary.getTotalAmount() != null ? summary.getTotalAmount().doubleValue() : 0.0);
+            summaryData.createCell(7).setCellValue(summary.getBudgetName() != null ? summary.getBudgetName() : "");
+            for (int i = 0; i <= 7; i++) {
+                summaryData.getCell(i).setCellStyle(dataStyle);
+            }
+
+            // Row 3: blank separator
+            sheet.createRow(3);
+
+            // Row 4: Section title "明细信息"
+            Row section1 = sheet.createRow(4);
+            Cell section1Cell = section1.createCell(0);
+            section1Cell.setCellValue("【明细信息】");
+            section1Cell.setCellStyle(sectionTitleStyle);
+            sheet.addMergedRegion(new CellRangeAddress(4, 4, 0, 6));
+
+            // Row 5: Detail headers (7 columns)
+            Row detailHeader = sheet.createRow(5);
+            String[] detailHeaders = {"票据类型", "日期", "消费类型", "票据文件", "摘要", "金额", "备注"};
+            for (int i = 0; i < detailHeaders.length; i++) {
+                Cell cell = detailHeader.createCell(i);
+                cell.setCellValue(detailHeaders[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            // Detail data rows start from row 6
+            int rowNum = 6;
+            for (ReportItem item : sortedItems) {
+                Row row = sheet.createRow(rowNum++);
+                row.createCell(0).setCellValue(ExpenseType.getName(item.getReceiptType()));
+                row.createCell(1).setCellValue(DateUtils.formatDate(item.getDate()));
+                row.createCell(2).setCellValue(ExpenseType.getExpenseTypeName(item.getExpenseType()));
+                row.createCell(3).setCellValue(item.getReceiptFile() != null ? item.getReceiptFile() : "");
+                row.createCell(4).setCellValue(item.getSummary() != null ? item.getSummary() : "");
+                row.createCell(5).setCellValue(item.getAmount() != null ? item.getAmount().doubleValue() : 0.0);
+                row.createCell(6).setCellValue(item.getRemark() != null ? item.getRemark() : "");
+                for (int i = 0; i < 7; i++) {
+                    row.getCell(i).setCellStyle(dataStyle);
+                }
+            }
+
+            // Set column widths: col0=project name wider, col3=receipt file widest
+            sheet.setColumnWidth(0, 6000);
+            sheet.setColumnWidth(1, 4000);
+            sheet.setColumnWidth(2, 3500);
+            sheet.setColumnWidth(3, 8000);
+            sheet.setColumnWidth(4, 5000);
+            sheet.setColumnWidth(5, 4000);
+            sheet.setColumnWidth(6, 4500);
+            sheet.setColumnWidth(7, 4500);
 
             workbook.write(outputStream);
+
+            // Save a copy to disk under project-specific directory
+            String fileName = (project.getName() != null ? project.getName() : "项目")
+                    + "_报销单_" + DateUtils.formatForFilename(java.time.LocalDate.now()) + ".xlsx";
+            File destDir = new File(storageBasePath, project.getId() + File.separator + (project.getName() != null ? project.getName() : "项目"));
+            if (!destDir.exists()) {
+                destDir.mkdirs();
+            }
+            File destFile = new File(destDir, fileName);
+            try (FileOutputStream fos = new FileOutputStream(destFile)) {
+                workbook.write(fos);
+                log.info("Excel已保存到: {}", destFile.getAbsolutePath());
+            }
         } catch (Exception e) {
             log.error("导出Excel失败", e);
             throw new BusinessException(ErrorCode.EXPORT_ERROR, "导出失败: " + e.getMessage());
         }
+    }
+
+    private CellStyle createSectionTitleStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setFontHeightInPoints((short) 12);
+        style.setFont(font);
+        style.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        return style;
     }
 
     private CellStyle createHeaderStyle(Workbook workbook) {
@@ -236,97 +356,6 @@ public class ReportServiceImpl implements ReportService {
         style.setBorderRight(BorderStyle.THIN);
         style.setAlignment(HorizontalAlignment.LEFT);
         return style;
-    }
-
-    private void createSummarySheet(Sheet sheet, CellStyle headerStyle, CellStyle dataStyle,
-                                    Project project, ReportSummaryVO summary) {
-        String[] headers = {"项目名称", "出差人", "部门", "出差日期", "总金额", "发票金额", "截图金额", "预算项目", "预算使用"};
-        Row headerRow = sheet.createRow(0);
-        for (int i = 0; i < headers.length; i++) {
-            Cell cell = headerRow.createCell(i);
-            cell.setCellValue(headers[i]);
-            cell.setCellStyle(headerStyle);
-            sheet.setColumnWidth(i, 4000);
-        }
-
-        Row dataRow = sheet.createRow(1);
-        String dateRange = (project.getStartDate() != null ? DateUtils.formatDate(project.getStartDate()) : "")
-                + " ~ " + (project.getEndDate() != null ? DateUtils.formatDate(project.getEndDate()) : "");
-        dataRow.createCell(0).setCellValue(project.getName());
-        dataRow.createCell(1).setCellValue(project.getPerson() != null ? project.getPerson() : "");
-        dataRow.createCell(2).setCellValue(project.getDepartment() != null ? project.getDepartment() : "");
-        dataRow.createCell(3).setCellValue(dateRange);
-        dataRow.createCell(4).setCellValue(summary.getTotalAmount() != null ? summary.getTotalAmount().doubleValue() : 0.0);
-        dataRow.createCell(5).setCellValue(summary.getTransportAmount() != null ? summary.getTransportAmount().doubleValue() : 0.0);
-        dataRow.createCell(6).setCellValue(summary.getCateringAmount() != null ? summary.getCateringAmount().doubleValue() : 0.0);
-        dataRow.createCell(7).setCellValue(summary.getBudgetName() != null ? summary.getBudgetName() : "");
-        dataRow.createCell(8).setCellValue(summary.getBudgetUsed() != null ? summary.getBudgetUsed().doubleValue() : 0.0);
-
-        for (int i = 0; i <= 8; i++) {
-            dataRow.getCell(i).setCellStyle(dataStyle);
-        }
-    }
-
-    private void createDetailSheet(Sheet sheet, CellStyle headerStyle, CellStyle dataStyle, List<ReportItem> items) {
-        String[] headers = {"日期", "票据类型", "消费类型", "票据文件", "摘要", "金额", "备注"};
-        Row headerRow = sheet.createRow(0);
-        for (int i = 0; i < headers.length; i++) {
-            Cell cell = headerRow.createCell(i);
-            cell.setCellValue(headers[i]);
-            cell.setCellStyle(headerStyle);
-            sheet.setColumnWidth(i, 4500);
-        }
-
-        int rowNum = 1;
-        for (ReportItem item : items) {
-            Row row = sheet.createRow(rowNum++);
-            row.createCell(0).setCellValue(DateUtils.formatDate(item.getDate()));
-            row.createCell(1).setCellValue(ExpenseType.getName(item.getReceiptType()));
-            row.createCell(2).setCellValue(ExpenseType.getExpenseTypeName(item.getExpenseType()));
-            row.createCell(3).setCellValue(item.getReceiptFile() != null ? item.getReceiptFile() : "");
-            row.createCell(4).setCellValue(item.getSummary() != null ? item.getSummary() : "");
-            row.createCell(5).setCellValue(item.getAmount() != null ? item.getAmount().doubleValue() : 0.0);
-            row.createCell(6).setCellValue(item.getRemark() != null ? item.getRemark() : "");
-            for (int i = 0; i < 7; i++) {
-                row.getCell(i).setCellStyle(dataStyle);
-            }
-        }
-    }
-
-    private void createFileSheet(Sheet sheet, CellStyle headerStyle, CellStyle dataStyle, Long projectId) {
-        String[] headers = {"文件名", "类型", "大小", "上传时间", "状态"};
-        Row headerRow = sheet.createRow(0);
-        for (int i = 0; i < headers.length; i++) {
-            Cell cell = headerRow.createCell(i);
-            cell.setCellValue(headers[i]);
-            cell.setCellStyle(headerStyle);
-            sheet.setColumnWidth(i, 5000);
-        }
-
-        List<UploadFile> files = uploadFileMapper.selectList(
-                new LambdaQueryWrapper<UploadFile>().eq(UploadFile::getProjectId, projectId)
-        );
-
-        int rowNum = 1;
-        for (UploadFile file : files) {
-            Row row = sheet.createRow(rowNum++);
-            row.createCell(0).setCellValue(file.getOriginalName());
-            row.createCell(1).setCellValue(com.aidemo.myaitravelreimbursement.constant.FileType.getName(file.getType()));
-            row.createCell(2).setCellValue(formatSize(file.getSize()));
-            row.createCell(3).setCellValue(DateUtils.formatDateTime(file.getCreatedAt()));
-            row.createCell(4).setCellValue(com.aidemo.myaitravelreimbursement.constant.FileStatus.getName(file.getStatus()));
-            for (int i = 0; i < 5; i++) {
-                row.getCell(i).setCellStyle(dataStyle);
-            }
-        }
-    }
-
-    private String formatSize(Long size) {
-        if (size == null) return "0 B";
-        if (size < 1024) return size + " B";
-        if (size < 1024 * 1024) return String.format("%.1f KB", size / 1024.0);
-        if (size < 1024 * 1024 * 1024) return String.format("%.1f MB", size / (1024.0 * 1024));
-        return String.format("%.1f GB", size / (1024.0 * 1024 * 1024));
     }
 
     private ReportItemVO convertToVO(ReportItem item) {
