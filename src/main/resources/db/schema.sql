@@ -139,18 +139,21 @@ ALTER TABLE t_report_item
     ADD COLUMN expense_type VARCHAR(50) NOT NULL DEFAULT 'transport'
         COMMENT '消费类型: transport/catering/accommodation/purchase'
         AFTER receipt_type;
--- 创建 Agent 会话表
+-- 创建 Agent 会话表（每行存储一条对话，id升序=时间正序，role区分用户/AI）
 CREATE TABLE IF NOT EXISTS t_agent_session (
   id              BIGINT PRIMARY KEY AUTO_INCREMENT,
   project_id      BIGINT NOT NULL COMMENT '所属项目ID',
-  session_id      VARCHAR(64) NOT NULL UNIQUE COMMENT '会话唯一ID（UUID）',
+  session_id      VARCHAR(64) NOT NULL COMMENT '会话唯一ID（UUID）',
   user_id         VARCHAR(100) COMMENT '用户标识',
+  role            VARCHAR(20) NOT NULL DEFAULT 'user' COMMENT '消息角色: user=用户消息, assistant=AI回复',
+  last_message    TEXT COMMENT '对话内容',
   status          TINYINT DEFAULT 0 COMMENT '0-活跃 1-已完成',
-  last_message    VARCHAR(500) COMMENT '最后一条用户消息摘要',
   created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (project_id) REFERENCES t_project(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Agent会话表';
+  FOREIGN KEY (project_id) REFERENCES t_project(id) ON DELETE CASCADE,
+  INDEX idx_session_id (session_id),
+  INDEX idx_project_session (project_id, session_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Agent会话表（每行一条对话）';
 
 -- 创建 Agent 任务执行日志表
 CREATE TABLE IF NOT EXISTS t_agent_task_log (
@@ -197,3 +200,15 @@ CREATE TABLE IF NOT EXISTS t_agent_task_log (
 --   created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
 --   updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 -- );
+
+-- t_agent_session: 重构为每行一条对话（新增 role 列区分用户/AI，session_id 不再唯一）
+-- 1) 添加 role 列
+-- ALTER TABLE t_agent_session ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user' COMMENT '消息角色: user=用户消息, assistant=AI回复';
+-- 2) 改为 TEXT 存储完整内容
+-- ALTER TABLE t_agent_session MODIFY COLUMN last_message TEXT COMMENT '对话内容';
+-- 3) 删除 session_id 的 UNIQUE 约束
+-- ALTER TABLE t_agent_session DROP INDEX session_id;
+-- 4) 添加索引
+-- ALTER TABLE t_agent_session ADD INDEX idx_session_id (session_id);
+-- ALTER TABLE t_agent_session ADD INDEX idx_project_session (project_id, session_id);
+DROP TABLE IF EXISTS t_agent_session;

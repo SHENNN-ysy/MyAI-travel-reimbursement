@@ -36,18 +36,20 @@ storage:
 
 # AI 大模型配置
 ai:
-  # Provider: langchain4j (默认) | okhttp
+  provider: langchain4j
+  #okhttp
   #Kimi
 #  provider: langchain4j
-#  base-url: https://api.moonshot.cn/v1
-#  api-key: sk-FBn2jGPgWM6gkp5xN9fptC7TDkwqXzzzy4pq7v7eOsvAsl8K
-#  model: moonshot-v1-8k-vision-preview
+  base-url: https://api.moonshot.cn/v1
+  api-key: sk-FBn2jGPgWM6gkp5xN9fptC7TDkwqXzzzy4pq7v7eOsvAsl8K
+  model: kimi-k2.5
+
   #      智谱
-  base-url: https://open.bigmodel.cn/api/paas/v4/
-  api-key: b6e0db2a29744042a2de425928fb3f69.nzDgy81VBASU7BVV
-  model: glm-5.1
+#  base-url: https://open.bigmodel.cn/api/paas/v4/
+#  api-key: b6e0db2a29744042a2de425928fb3f69.nzDgy81VBASU7BVV
+#  model: glm-5.1
   timeout: 60
-  temperature: 0.7
+  temperature: 1.0
   max-retries: 3
 
 # Knife4j 配置
@@ -61,3 +63,5 @@ knife4j:
 logging:
   level:
     com.aidemo.myaitravelreimbursement: debug
+  pattern:
+    console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n"

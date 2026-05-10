@@ -17,20 +17,35 @@ import com.aidemo.myaitravelreimbursement.service.AiRecognitionService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.ImageContent;
+import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.request.ResponseFormat;
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
+import dev.langchain4j.model.chat.request.json.JsonSchema;
+import dev.langchain4j.model.chat.response.ChatResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.util.Base64;
-import java.util.List;
+
+import javax.imageio.ImageIO;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.PDFRenderer;
+
+import static dev.langchain4j.model.chat.request.ResponseFormatType.JSON;
+
 
 /**
  * 基于 LangChain4j 的 AI 识别服务实现
@@ -69,16 +84,26 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
                 throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在");
             }
 
-            byte[] imageBytes = Files.readAllBytes(imageFile.toPath());
+            byte[] imageBytes;
+            String mimeType;
+            if (detectMimeType(imageFile.getName()).equals("application/pdf")) {
+                imageBytes = renderPdfFirstPageToImage(fullPath);
+                mimeType = "image/jpeg";
+            } else {
+                imageBytes = Files.readAllBytes(imageFile.toPath());
+                mimeType = detectMimeType(imageFile.getName());
+            }
             String base64Image = Base64.getEncoder().encodeToString(imageBytes);
-            String mimeType = detectMimeType(imageFile.getName());
+          
             String imageDataUri = "data:" + mimeType + ";base64," + base64Image;
 
             String prompt = "invoice".equals(type)
                     ? RecognitionPrompts.INVOICE_PROMPT
                     : RecognitionPrompts.SCREENSHOT_PROMPT;
 
-            String aiResponse = callAiApi(imageDataUri, prompt);
+            String Type = "invoice".equals(type) ? "发票" : "截图";
+
+            String aiResponse = callAiApi(imageDataUri, prompt,Type);
 
             Object parsedResult = parseStructuredResult(aiResponse, type);
             RecognitionResult rr = mapToEntity(parsedResult, file, type, aiResponse);
@@ -118,16 +143,51 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
     /**
      * 通过 LangChain4j ChatModel 调用视觉大模型
      */
-    private String callAiApi(String imageDataUri, String prompt) {
-        ImageContent imageContent = ImageContent.from(imageDataUri);
-        UserMessage userMessage = UserMessage.from(prompt, imageContent);
+    private String callAiApi(String imageDataUri, String prompt, String Type) {
+        UserMessage userMessage = UserMessage.from(
+                TextContent.from(prompt),
+                ImageContent.from(imageDataUri)
+        );
 
-        ChatRequest request = ChatRequest.builder()
-                .messages(List.of(userMessage))
-                .modelName(aiProperties.getModel())
+        ResponseFormat invoiceResponseFormat = ResponseFormat.builder()
+                .type(JSON)
+                .jsonSchema(JsonSchema.builder()
+                        .name("InvoiceRecognitionResult")
+                        .rootElement(JsonObjectSchema.builder()
+                                .addStringProperty("expense_type", "费用类型，枚举：transport / catering / accommodation / purchase")
+                                .addStringProperty("invoice_number", "发票号码")
+                                .addStringProperty("invoice_date", "开票日期，格式：YYYY-MM-DD")
+                                .addNumberProperty("total_amount", "价税合计金额")
+                                .addStringProperty("seller", "销售方名称")
+                                .addStringProperty("buyer", "购买方名称")
+                                .addStringProperty("description", "文件简述")
+                                .addStringProperty("rewriteFileNameByAi", "AI生成的中文文件名，如'滴滴出行客运服务费_20260405'，不含后缀")
+                                .required("expense_type")
+                                .build())
+                        .build())
                 .build();
 
-        dev.langchain4j.model.chat.response.ChatResponse response = chatModel.chat(request);
+        ResponseFormat screenshotResponseFormat = ResponseFormat.builder()
+                .type(JSON)
+                .jsonSchema(JsonSchema.builder()
+                        .name("ScreenshotRecognitionResult")
+                        .rootElement(JsonObjectSchema.builder()
+                                .addStringProperty("expense_type", "费用类型，枚举：transport / catering / accommodation / purchase")
+                                .addStringProperty("consumption_date", "消费日期，格式：YYYY-MM-DD")
+                                .addNumberProperty("total_consumption", "消费总额")
+                                .addIntegerProperty("consumption_count", "消费次数")
+                                .addStringProperty("description", "文件简述")
+                                .addStringProperty("rewriteFileNameByAi", "AI生成的中文文件名，如'微信支付账单总额_20260405'，不含后缀")
+                                .required("expense_type")
+                                .build())
+                        .build()).build();
+
+        ChatRequest chatRequest = ChatRequest.builder()
+                .responseFormat(Type.equals("invoice") ? invoiceResponseFormat : screenshotResponseFormat)
+                .messages(userMessage)
+                .build();
+
+        ChatResponse response = chatModel.chat(chatRequest);
 
         if (response == null || response.aiMessage() == null) {
             throw new BusinessException(ErrorCode.AI_RECOGNITION_FAILED, "AI 返回为空");
@@ -198,5 +258,22 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
         if (lower.endsWith(".heic")) return "image/heic";
         if (lower.endsWith(".pdf")) return "application/pdf";
         return "image/jpeg";
+    }
+
+    /**
+     * 将 PDF 第一页渲染为 JPEG 图片字节数组，供 AI 视觉模型识别
+     */
+    private byte[] renderPdfFirstPageToImage(String pdfPath) throws IOException {
+        try (PDDocument document = Loader.loadPDF(new File(pdfPath))) {
+            if (document.getNumberOfPages() == 0) {
+                throw new BusinessException(ErrorCode.AI_RECOGNITION_FAILED, "PDF 文件为空，无可识别页面");
+            }
+            PDFRenderer renderer = new PDFRenderer(document);
+            BufferedImage image = renderer.renderImageWithDPI(0, 96);
+            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                ImageIO.write(image, "JPG", baos);
+                return baos.toByteArray();
+            }
+        }
     }
 }

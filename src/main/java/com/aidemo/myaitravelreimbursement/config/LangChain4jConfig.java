@@ -1,7 +1,11 @@
 package com.aidemo.myaitravelreimbursement.config;
 
+import dev.langchain4j.memory.ChatMemory;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -13,8 +17,10 @@ import java.time.Duration;
 /**
  * LangChain4j 全局配置
  * <p>
- * 当 ai.provider=langchain4j 时（默认值）创建 OpenAiChatModel Bean。
- * 支持 DashScope（通义千问）、Moonshot（Kimi）等所有 OpenAI-compatible 视觉大模型。
+ * 当 ai.provider=langchain4j 时（默认值）创建两个 Bean：
+ * - {@link ChatModel}：非流式，用于 AI 识别等需要完整响应的场景
+ * - {@link StreamingChatModel}：流式，用于 Agent 对话等需要实时推送的场景
+ * 两者均兼容 DashScope / Moonshot / Kimi 等所有 OpenAI-compatible API
  */
 @Slf4j
 @Configuration
@@ -24,13 +30,12 @@ public class LangChain4jConfig {
     private final AiProperties aiProperties;
 
     /**
-     * OpenAI-compatible ChatModel Bean
-     * 使用 OpenAiChatModel，它兼容 DashScope / Moonshot / Kimi 等所有 OpenAI API 格式的视觉大模型
+     * 非流式 ChatModel Bean（用于 AI 识别等场景）
      */
     @Bean
     @ConditionalOnProperty(name = "ai.provider", havingValue = "langchain4j", matchIfMissing = true)
     public ChatModel chatModel() {
-        log.info("初始化 LangChain4j OpenAiChatModel, model={}, baseUrl={}",
+        log.info("初始化 LangChain4j ChatModel, model={}, baseUrl={}",
                 aiProperties.getModel(), aiProperties.getBaseUrl());
         return OpenAiChatModel.builder()
                 .apiKey(aiProperties.getApiKey())
@@ -39,6 +44,24 @@ public class LangChain4jConfig {
                 .timeout(Duration.ofSeconds(aiProperties.getTimeout()))
                 .temperature(aiProperties.getTemperature())
                 .maxRetries(aiProperties.getMaxRetries())
+                .build();
+    }
+
+    /**
+     * 流式 StreamingChatModel Bean（用于 Agent 对话等场景）
+     */
+    @Bean
+    @ConditionalOnProperty(name = "ai.provider", havingValue = "langchain4j", matchIfMissing = true)
+    public StreamingChatModel streamingChatModel() {
+
+        log.info("初始化 LangChain4j StreamingChatModel, model={}, baseUrl={}",
+                aiProperties.getModel(), aiProperties.getBaseUrl());
+        return OpenAiStreamingChatModel.builder()
+                .apiKey(aiProperties.getApiKey())
+                .modelName(aiProperties.getModel())
+                .baseUrl(aiProperties.getBaseUrl())
+                .timeout(Duration.ofSeconds(aiProperties.getTimeout()))
+                .temperature(aiProperties.getTemperature())
                 .build();
     }
 }

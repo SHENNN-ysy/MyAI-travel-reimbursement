@@ -15,6 +15,21 @@ import java.util.concurrent.Executor;
 public class AsyncConfig {
 
     /**
+     * Agent 执行专用线程池（用于 SSE 异步推送）
+     */
+    @Bean("agentExecutor")
+    public Executor agentExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(5);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("AgentExec-");
+        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
+    }
+
+    /**
      * 批量识别任务专用线程池
      */
     @Bean("batchRecognizeExecutor")

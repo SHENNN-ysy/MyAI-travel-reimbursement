@@ -30,17 +30,17 @@ public class AiProperties {
     /**
      * Model name (e.g. moonshot-v1-8k-vision-preview, qwen-vl-max)
      */
-    private String model = "moonshot-v1-8k-vision-preview";
+    private String model;
 
     /**
      * Request timeout in seconds
      */
-    private int timeout = 60;
+    private int timeout = 100;
 
     /**
      * Temperature for generation
      */
-    private double temperature = 0.7;
+    private double temperature = 1.0;
 
     /**
      * Max retries for transient errors

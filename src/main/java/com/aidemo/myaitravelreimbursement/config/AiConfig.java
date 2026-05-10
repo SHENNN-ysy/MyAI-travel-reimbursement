@@ -12,8 +12,8 @@ import org.springframework.context.annotation.Configuration;
 @ConfigurationProperties(prefix = "ai")
 public class AiConfig {
 
-    private String baseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+    private String baseUrl = "https://api.moonshot.cn/v1";
     private String apiKey;
-    private String model = "qwen-vl-max";
+    private String model = "kimi-k2.5";
     private int timeout = 60;
 }
