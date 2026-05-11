@@ -63,4 +63,10 @@ public class InvoiceRecognitionResult {
     @JsonProperty("rewriteFileNameByAi")
     private String rewriteFileNameByAi;
 
+    /**
+     * 置信度 (0-1)
+     */
+    @JsonProperty("confidence")
+    private BigDecimal confidence;
+
 }

@@ -207,8 +207,8 @@ public class FileStorageServiceImpl implements FileStorageService {
         if (dto.getConfirmed() != null) {
             file.setConfirmed(dto.getConfirmed());
         }
-        // 若传入了 aiFilename，则更新文件存储名
-        if (dto.getAiFilename() != null && !dto.getAiFilename().isBlank()) {
+        // 若传入了 aiFilename，则更新文件存储名（仅发票/截图，附件类型跳过）
+        if (dto.getAiFilename() != null && !dto.getAiFilename().isBlank() && !"attachment".equals(file.getType())) {
             file.setName(dto.getAiFilename());
         }
         uploadFileMapper.updateById(file);
@@ -290,8 +290,8 @@ public class FileStorageServiceImpl implements FileStorageService {
             UploadFile file = uploadFileMapper.selectById(fileId);
             if (file != null && file.getProjectId().equals(projectId)) {
                 file.setConfirmed(1);
-                // 若有 aiFilename 则更新文件存储名
-                if (file.getName() != null) {
+                // 若有 aiFilename 则更新文件存储名（仅发票/截图，附件类型跳过）
+                if (!"attachment".equals(file.getType())) {
                     RecognitionResult tmpResult = recognitionResultMapper.selectOne(
                             new LambdaQueryWrapper<RecognitionResult>()
                                     .eq(RecognitionResult::getFileId, fileId)

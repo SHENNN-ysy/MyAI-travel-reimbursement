@@ -108,14 +108,19 @@ CREATE TABLE IF NOT EXISTS t_batch_recognize_task (
   id          BIGINT PRIMARY KEY AUTO_INCREMENT,
   task_id     VARCHAR(64) NOT NULL UNIQUE COMMENT '任务ID(UUID)',
   project_id  BIGINT NOT NULL COMMENT '所属项目ID',
-  status      VARCHAR(20) DEFAULT 'pending' COMMENT '任务状态: pending/processing/completed/failed',
+  file_ids    TEXT COMMENT '待识别文件ID列表(JSON)',
   total       INT DEFAULT 0 COMMENT '总任务数',
   processed   INT DEFAULT 0 COMMENT '已处理数',
+  status      VARCHAR(20) DEFAULT 'pending' COMMENT '任务状态: pending/processing/completed/failed',
+  results     TEXT COMMENT '识别结果列表(JSON)',
   error_msg   TEXT COMMENT '错误信息',
+  deleted     TINYINT DEFAULT 0 COMMENT '逻辑删除: 0-未删除, 1-已删除',
   created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='批量识别任务表';
-
+ALTER TABLE t_batch_recognize_task
+ADD COLUMN file_ids TEXT COMMENT '待识别文件ID列表(JSON)' AFTER project_id,
+ADD COLUMN results TEXT COMMENT '识别结果列表(JSON)' AFTER status;
 -- 6. 全局设置表
 CREATE TABLE IF NOT EXISTS t_settings (
   id          BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -212,3 +217,8 @@ CREATE TABLE IF NOT EXISTS t_agent_task_log (
 -- ALTER TABLE t_agent_session ADD INDEX idx_session_id (session_id);
 -- ALTER TABLE t_agent_session ADD INDEX idx_project_session (project_id, session_id);
 DROP TABLE IF EXISTS t_agent_session;
+DELETE FROM t_recognition_result WHERE deleted = 1;
+DELETE FROM t_upload_file WHERE deleted = 1;
+ALTER TABLE t_batch_recognize_task
+ADD COLUMN deleted TINYINT DEFAULT 0 COMMENT '逻辑删除: 0-未删除, 1-已删除' AFTER error_msg;
+DELETE FROM t_batch_recognize_task

@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +37,7 @@ public class AsyncTaskExecutorServiceImpl implements AsyncTaskExecutorService {
 
     @Override
     @Async("batchRecognizeExecutor")
+    @Transactional
     public void executeBatchRecognizeTask(String taskId) {
         log.info("开始处理批量识别任务: taskId={}", taskId);
 
@@ -46,6 +48,11 @@ public class AsyncTaskExecutorServiceImpl implements AsyncTaskExecutorService {
 
         if (task == null) {
             log.error("任务不存在: taskId={}", taskId);
+            return;
+        }
+
+        if ("completed".equals(task.getStatus()) || "failed".equals(task.getStatus())) {
+            log.warn("任务已处于终态，跳过执行: taskId={}, status={}", taskId, task.getStatus());
             return;
         }
 

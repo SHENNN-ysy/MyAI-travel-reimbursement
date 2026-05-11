@@ -15,6 +15,7 @@ import com.aidemo.myaitravelreimbursement.mapper.RecognitionResultMapper;
 import com.aidemo.myaitravelreimbursement.mapper.UploadFileMapper;
 import com.aidemo.myaitravelreimbursement.service.AiRecognitionService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.TextContent;
@@ -31,15 +32,28 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Base64;
+import java.util.Iterator;
+import java.util.UUID;
 
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
+
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
@@ -66,8 +80,27 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
     private final ObjectMapper objectMapper;
     private final ChatModel chatModel;
 
+    /**
+     * 独立于当前事务更新文件识别状态及重命名信息。
+     * 解决 @Transactional 异常回滚时覆盖 status 的问题。
+     */
+    private void updateFileIndependently(Long fileId, int status, String name, String storagePath) {
+        LambdaUpdateWrapper<UploadFile> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(UploadFile::getId, fileId);
+        if (status > 0) {
+            wrapper.set(UploadFile::getStatus, status);
+        }
+        if (name != null) {
+            wrapper.set(UploadFile::getName, name);
+        }
+        if (storagePath != null) {
+            wrapper.set(UploadFile::getStoragePath, storagePath);
+        }
+        uploadFileMapper.update(null, wrapper);
+    }
+
     @Override
-    @Transactional
+    //@Transactional(noRollbackFor = Exception.class)
     public RecognitionResultVO recognize(Long fileId, String type) {
         UploadFile file = uploadFileMapper.selectById(fileId);
         if (file == null) {
@@ -86,12 +119,13 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
 
             byte[] imageBytes;
             String mimeType;
-            if (detectMimeType(imageFile.getName()).equals("application/pdf")) {
+            if ("application/pdf".equals(detectMimeType(imageFile.getName()))) {
                 imageBytes = renderPdfFirstPageToImage(fullPath);
                 mimeType = "image/jpeg";
             } else {
-                imageBytes = Files.readAllBytes(imageFile.toPath());
-                mimeType = detectMimeType(imageFile.getName());
+                byte[] rawBytes = Files.readAllBytes(imageFile.toPath());
+                imageBytes = compressImage(rawBytes, detectMimeType(imageFile.getName()));
+                mimeType = "image/jpeg";
             }
             String base64Image = Base64.getEncoder().encodeToString(imageBytes);
           
@@ -108,7 +142,29 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
             Object parsedResult = parseStructuredResult(aiResponse, type);
             RecognitionResult rr = mapToEntity(parsedResult, file, type, aiResponse);
 
-            // 根据 fileId 查询是否存在记录，存在则更新，不存在则插入
+            // 置信度低于 0.5 视为识别失败
+            if (rr.getConfidence() != null && rr.getConfidence().compareTo(new BigDecimal("0.5")) < 0) {
+                updateFileIndependently(fileId, FileStatus.FAILED, null, null);
+                throw new RuntimeException("识别置信度过低(=" + rr.getConfidence() + ")，请检查图片清晰度后重试");
+            }
+
+            // 先重命名物理文件，再用更新后的数据入库（仅发票/截图，附件跳过）
+            String aiFilename = rr.getAiFilename();
+            String newFileName = null;
+            String newStoragePath = null;
+            if (aiFilename != null && !aiFilename.isBlank() && !"attachment".equals(type)) {
+                String originalExt = getFileExtension(file.getOriginalName());
+                String uniqueId = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+                newFileName = aiFilename + "_" + uniqueId + originalExt;
+                Path oldPath = Paths.get(fullPath);
+                Path newPath = oldPath.resolveSibling(newFileName);
+                Files.move(oldPath, newPath, StandardCopyOption.REPLACE_EXISTING);
+                String oldStoragePath = file.getStoragePath();
+                newStoragePath = oldStoragePath.substring(0, oldStoragePath.lastIndexOf('/') + 1) + newFileName;
+                log.info("文件重命名完成: {} -> {}", oldStoragePath, newStoragePath);
+            }
+
+            // 入库：RecognitionResult
             LambdaQueryWrapper<RecognitionResult> queryWrapper = new LambdaQueryWrapper<RecognitionResult>()
                     .eq(RecognitionResult::getFileId, fileId);
             RecognitionResult existing = recognitionResultMapper.selectOne(queryWrapper);
@@ -119,19 +175,14 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
                 recognitionResultMapper.insert(rr);
             }
 
-            file.setStatus(FileStatus.SUCCESS);
-            uploadFileMapper.updateById(file);
+            // 入库：UploadFile（强制写入 SUCCESS 状态及重命名信息，防止事务内 UPDATE 未执行）
+            updateFileIndependently(fileId, FileStatus.SUCCESS, newFileName, newStoragePath);
 
             return RecognitionResultVO.fromEntity(rr);
-        } catch (BusinessException e) {
-            file.setStatus(FileStatus.FAILED);
-            uploadFileMapper.updateById(file);
-            throw e;
         } catch (Exception e) {
             log.error("LangChain4j AI识别失败: fileId={}", fileId, e);
-            file.setStatus(FileStatus.FAILED);
-            uploadFileMapper.updateById(file);
-            throw new BusinessException(ErrorCode.AI_RECOGNITION_FAILED, "AI识别失败: " + e.getMessage());
+            updateFileIndependently(fileId, FileStatus.FAILED, null, null);
+            throw new RuntimeException("AI识别失败: " + e.getMessage(), e);
         }
     }
 
@@ -162,6 +213,7 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
                                 .addStringProperty("buyer", "购买方名称")
                                 .addStringProperty("description", "文件简述")
                                 .addStringProperty("rewriteFileNameByAi", "AI生成的中文文件名，如'滴滴出行客运服务费_20260405'，不含后缀")
+                                .addNumberProperty("confidence", "置信度，0到1之间的小数")
                                 .required("expense_type")
                                 .build())
                         .build())
@@ -178,6 +230,7 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
                                 .addIntegerProperty("consumption_count", "消费次数")
                                 .addStringProperty("description", "文件简述")
                                 .addStringProperty("rewriteFileNameByAi", "AI生成的中文文件名，如'微信支付账单总额_20260405'，不含后缀")
+                                .addNumberProperty("confidence", "置信度，0到1之间的小数")
                                 .required("expense_type")
                                 .build())
                         .build()).build();
@@ -203,15 +256,20 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
      */
     private Object parseStructuredResult(String aiResponse, String type) {
         try {
+            // AI 可能将 null 日期写成字符串 "null"，预处理后替换为真正的 JSON null
+            String preprocessed = aiResponse.replaceAll(
+                    "\"(" + ("invoice".equals(type) ? "invoice_date" : "consumption_date") + ")\"\\s*:\\s*\"null\"",
+                    "\"$1\": null"
+            );
             if ("invoice".equals(type)) {
-                return objectMapper.readValue(aiResponse, InvoiceRecognitionResult.class);
+                return objectMapper.readValue(preprocessed, InvoiceRecognitionResult.class);
             } else {
-                return objectMapper.readValue(aiResponse, ScreenshotRecognitionResult.class);
+                return objectMapper.readValue(preprocessed, ScreenshotRecognitionResult.class);
             }
         } catch (Exception e) {
             log.error("解析AI响应失败: {}", aiResponse, e);
-            throw new BusinessException(ErrorCode.AI_RECOGNITION_FAILED,
-                    "AI 返回格式解析失败: " + e.getMessage());
+            // 直接抛 RuntimeException 而非 BusinessException，避免被外层 catch 再次处理并触发事务回滚
+            throw new RuntimeException("AI 返回格式解析失败: " + e.getMessage(), e);
         }
     }
 
@@ -224,8 +282,8 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
         rr.setFileId(file.getId());
         rr.setType(type);
         rr.setRawResponse(rawResponse);
-        rr.setConfidence(new BigDecimal("0.9000"));
 
+        BigDecimal aiConfidence = null;
         if ("invoice".equals(type) && parsedResult instanceof InvoiceRecognitionResult invoice) {
             rr.setExpenseType(invoice.getExpenseType());
             rr.setInvoiceNumber(invoice.getInvoiceNumber());
@@ -235,6 +293,7 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
             rr.setBuyer(invoice.getBuyer());
             rr.setDescription(invoice.getDescription());
             rr.setAiFilename(invoice.getRewriteFileNameByAi());
+            aiConfidence = invoice.getConfidence();
         } else if (parsedResult instanceof ScreenshotRecognitionResult screenshot) {
             rr.setExpenseType(screenshot.getExpenseType());
             rr.setConsumptionDate(screenshot.getConsumptionDate());
@@ -242,6 +301,13 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
             rr.setConsumptionCount(screenshot.getConsumptionCount());
             rr.setDescription(screenshot.getDescription());
             rr.setAiFilename(screenshot.getRewriteFileNameByAi());
+            aiConfidence = screenshot.getConfidence();
+        }
+
+        if (aiConfidence != null && aiConfidence.compareTo(BigDecimal.ZERO) > 0) {
+            rr.setConfidence(aiConfidence);
+        } else {
+            rr.setConfidence(new BigDecimal("0"));
         }
 
         return rr;
@@ -269,11 +335,102 @@ public class LangChainAiRecognitionServiceImpl implements AiRecognitionService {
                 throw new BusinessException(ErrorCode.AI_RECOGNITION_FAILED, "PDF 文件为空，无可识别页面");
             }
             PDFRenderer renderer = new PDFRenderer(document);
-            BufferedImage image = renderer.renderImageWithDPI(0, 96);
-            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-                ImageIO.write(image, "JPG", baos);
-                return baos.toByteArray();
+            BufferedImage image = renderer.renderImageWithDPI(0, 150);
+            return compressImage(toJpegBytes(image), null);
+        }
+    }
+
+    /**
+     * 对图片进行压缩：缩放到最大 1024x1024 像素，然后 JPEG 质量压缩到 80%
+     *
+     * @param image 原始图片字节数组
+     * @return 压缩后的 JPEG 字节数组
+     */
+    private byte[] toJpegBytes(BufferedImage image) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(image, "jpg", baos);
+        return baos.toByteArray();
+    }
+
+    private byte[] compressImage(byte[] rawBytes, String mimeType) throws IOException {
+        BufferedImage original = ImageIO.read(new ByteArrayInputStream(rawBytes));
+        if (original == null) {
+            throw new BusinessException(ErrorCode.AI_RECOGNITION_FAILED, "无法解析图片格式");
+        }
+
+        int width = original.getWidth();
+        int height = original.getHeight();
+        int maxDimension = 1600;
+        int targetSizeBytes = 300 * 1024; // 200KB
+
+        // 如果原图尺寸和大小都满足要求，直接返回
+        if (width <= maxDimension && height <= maxDimension && rawBytes.length <= targetSizeBytes && "image/jpeg".equals(mimeType)) {
+            return rawBytes;
+        }
+
+        // 计算缩放比例，保持宽高比
+        double scale = Math.min(1.0, (double) maxDimension / Math.max(width, height));
+        int newWidth = (int) (width * scale);
+        int newHeight = (int) (height * scale);
+
+        BufferedImage resized = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2d = resized.createGraphics();
+        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g2d.drawImage(original, 0, 0, newWidth, newHeight, null);
+        g2d.dispose();
+
+        // 二分搜索最优压缩质量，控制在 targetSizeBytes 以内
+        float lo = 0.05f, hi = 1.0f, quality = 0.80f;
+        byte[] best = null;
+
+        for (int i = 0; i < 8; i++) {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            param.setCompressionQuality(quality);
+            writer.setOutput(ImageIO.createImageOutputStream(baos));
+            writer.write(null, new IIOImage(resized, null, null), param);
+            writer.dispose();
+
+            byte[] result = baos.toByteArray();
+            if (result.length <= targetSizeBytes) {
+                best = result;
+                lo = quality;          // 可以接受更高质量
+                quality = (lo + hi) / 2;
+            } else {
+                hi = quality;          // 需要更低质量
+                quality = (lo + hi) / 2;
             }
         }
+
+        if (best == null) {
+            // 兜底：最低质量仍超限，强制定为最小尺寸
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            param.setCompressionQuality(0.05f);
+            writer.setOutput(ImageIO.createImageOutputStream(baos));
+            writer.write(null, new IIOImage(resized, null, null), param);
+            writer.dispose();
+            best = baos.toByteArray();
+        }
+
+        int originalSizeKB = rawBytes.length / 1024;
+        int compressedSizeKB = best.length / 1024;
+        log.info("图片压缩完成: {}x{} -> {}x{}, 大小: {}KB -> {}KB",
+                width, height, newWidth, newHeight, originalSizeKB, compressedSizeKB);
+        return best;
+    }
+
+    /**
+     * 从文件名中提取后缀（含点号），如 ".jpg"
+     */
+    private String getFileExtension(String originalName) {
+        if (originalName == null || !originalName.contains(".")) {
+            return "";
+        }
+        return originalName.substring(originalName.lastIndexOf("."));
     }
 }

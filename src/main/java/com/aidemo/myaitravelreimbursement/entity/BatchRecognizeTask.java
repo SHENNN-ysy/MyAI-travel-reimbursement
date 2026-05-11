@@ -22,6 +22,7 @@ public class BatchRecognizeTask {
     private Long projectId;
 
     /** 待识别文件ID列表（JSON字符串，如 [1001,1002,1003]） */
+    @TableField("file_ids")
     private String fileIds;
 
     /** 总任务数 */
@@ -34,9 +35,11 @@ public class BatchRecognizeTask {
     private String status;
 
     /** 识别结果列表（JSON字符串） */
+    @TableField("results")
     private String results;
 
     /** 错误信息 */
+    @TableField("error_msg")
     private String errorMessage;
 
     @TableLogic

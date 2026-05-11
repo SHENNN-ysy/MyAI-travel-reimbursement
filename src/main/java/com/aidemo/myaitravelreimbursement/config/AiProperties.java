@@ -35,7 +35,7 @@ public class AiProperties {
     /**
      * Request timeout in seconds
      */
-    private int timeout = 100;
+    private int timeout = 200;
 
     /**
      * Temperature for generation

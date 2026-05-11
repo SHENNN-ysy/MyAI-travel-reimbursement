@@ -58,6 +58,12 @@ public class GlobalExceptionHandler {
         return Result.error(ErrorCode.BAD_REQUEST, e.getMessage());
     }
 
+    @ExceptionHandler(RuntimeException.class)
+    public Result<?> handleRuntimeException(RuntimeException e) {
+        log.warn("运行时异常: {}", e.getMessage());
+        return Result.error(ErrorCode.AI_RECOGNITION_FAILED, e.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Result<?> handleException(Exception e) {
