@@ -6,16 +6,14 @@ import com.aidemo.myaitravelreimbursement.agent.tools.FileTools;
 import com.aidemo.myaitravelreimbursement.agent.tools.ProjectTools;
 import com.aidemo.myaitravelreimbursement.agent.tools.RecognitionTools;
 import com.aidemo.myaitravelreimbursement.agent.tools.ReportTools;
-import dev.langchain4j.memory.ChatMemory;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.SystemMessage;
+import dev.langchain4j.service.TokenStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Flux;
 
 /**
  * Agent 对话服务（基于 LangChain4j AiServices）
@@ -41,15 +39,16 @@ public class ReimbursementAgent {
     public interface Assistant {
 
         @SystemMessage(AgentSystemPrompt.SYSTEM_PROMPT)
-        Flux<String> chatStream(String userMessage);
+        TokenStream chatStream(String userMessage);
     }
 
     /**
      * 创建 Agent 实例（每个会话独立）
      * AiServices 自动生成代理：处理 LLM + Tool 循环 + ChatMemory
+     *
+     * @param sessionId 会话 ID（用于管理 ChatMemory）
      */
     public Assistant createAssistant(String sessionId) {
-
         return AiServices.builder(Assistant.class)
                 .streamingChatModel(chatStreamModel)
                 .chatMemory(memoryManager.getMemory(sessionId))

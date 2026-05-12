@@ -27,6 +27,23 @@ public class AgentServiceImpl implements AgentService {
     private final AgentSessionMapper sessionMapper;
 
     @Override
+    public String createSession(Long projectId) {
+        String sessionId = java.util.UUID.randomUUID().toString().replace("-", "");
+        AgentSession record = new AgentSession();
+        record.setProjectId(projectId);
+        record.setSessionId(sessionId);
+        record.setRole("user");
+        record.setLastMessage("新建对话");
+        record.setStatus(0);
+        record.setCreatedAt(LocalDateTime.now());
+        record.setUpdatedAt(LocalDateTime.now());
+
+        sessionMapper.insert(record);
+        log.info("新建会话: sessionId={}, projectId={}", sessionId, projectId);
+        return sessionId;
+    }
+
+    @Override
     @Transactional
     public void createSession(Long projectId, String sessionId, String userMessage) {
         AgentSession record = new AgentSession();

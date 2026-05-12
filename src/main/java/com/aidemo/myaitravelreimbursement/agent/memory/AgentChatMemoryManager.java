@@ -15,7 +15,7 @@ public class AgentChatMemoryManager {
 
     private final Map<String, MessageWindowChatMemory> memories = new ConcurrentHashMap<>();
 
-    private static final int MAX_MESSAGES = 20;
+    private static final int MAX_MESSAGES = 3;
 
     public MessageWindowChatMemory getMemory(String sessionId) {
         return memories.computeIfAbsent(sessionId,

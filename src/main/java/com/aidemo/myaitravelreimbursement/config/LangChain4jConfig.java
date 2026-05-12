@@ -62,6 +62,9 @@ public class LangChain4jConfig {
                 .baseUrl(aiProperties.getBaseUrl())
                 .timeout(Duration.ofSeconds(aiProperties.getTimeout()))
                 .temperature(aiProperties.getTemperature())
+                .returnThinking(true)      // parse reasoning_content from response into aiMessage.thinking()
+                .sendThinking(true)        // send aiMessage.thinking() as reasoning_content in requests
+                .maxTokens(16000)
                 .build();
     }
 }

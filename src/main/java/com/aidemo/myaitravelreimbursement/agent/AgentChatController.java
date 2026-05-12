@@ -68,6 +68,13 @@ public class AgentChatController {
         return emitter;
     }
 
+    @Operation(summary = "新建会话")
+    @PostMapping("/sessions")
+    public Result<String> createSession(@PathVariable Long projectId) {
+        String sessionId = agentService.createSession(projectId);
+        return Result.success(sessionId);
+    }
+
     @Operation(summary = "获取会话列表")
     @GetMapping("/sessions")
     public Result<?> listSessions(@PathVariable Long projectId) {

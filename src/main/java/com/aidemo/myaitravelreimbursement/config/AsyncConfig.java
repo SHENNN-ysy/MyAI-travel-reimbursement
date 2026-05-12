@@ -6,6 +6,8 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * 异步任务线程池配置
@@ -42,5 +44,17 @@ public class AsyncConfig {
         executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
         executor.initialize();
         return executor;
+    }
+
+    /**
+     * 调度线程池（用于 SSE token 批量发送）
+     */
+    @Bean("sseScheduler")
+    public ScheduledExecutorService sseScheduler() {
+        return Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "SSE-Scheduler");
+            t.setDaemon(true);
+            return t;
+        });
     }
 }

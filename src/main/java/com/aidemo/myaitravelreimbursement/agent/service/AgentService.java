@@ -1,7 +1,6 @@
 package com.aidemo.myaitravelreimbursement.agent.service;
 
 import com.aidemo.myaitravelreimbursement.agent.dto.AgentMessageDTO;
-import com.aidemo.myaitravelreimbursement.agent.dto.AgentSessionDetailVO;
 import com.aidemo.myaitravelreimbursement.agent.dto.AgentSessionVO;
 
 import java.util.List;
@@ -10,6 +9,11 @@ import java.util.List;
  * Agent 会话服务接口
  */
 public interface AgentService {
+
+    /**
+     * 新建会话（仅插入一条占位记录，lastMessage="新建对话"）
+     */
+    String createSession(Long projectId);
 
     /**
      * 创建/记录一条用户对话（插入新行）
