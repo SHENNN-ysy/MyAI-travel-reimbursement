@@ -2,6 +2,8 @@ package com.aidemo.myaitravelreimbursement.agent.tools;
 
 import com.aidemo.myaitravelreimbursement.common.PageResult;
 import com.aidemo.myaitravelreimbursement.dto.response.FileVO;
+import com.aidemo.myaitravelreimbursement.entity.Project;
+import com.aidemo.myaitravelreimbursement.mapper.ProjectMapper;
 import com.aidemo.myaitravelreimbursement.service.FileStorageService;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.P;
@@ -16,18 +18,26 @@ import org.springframework.stereotype.Component;
 public class FileTools {
 
     private final FileStorageService fileStorageService;
+    private final ProjectMapper projectMapper;
 
-    @Tool("列出指定项目下的所有上传文件，支持按类型筛选。入参：projectId - 项目ID（必填）、type - 文件类型（可选，invoice/screenshot/attachment）")
-    public String listFiles(@P("projectId") Long projectId, @P("type") String type) {
+    @Tool("列出指定项目下的所有上传文件，支持按类型筛选。入参：projectName - 项目名称（必填）、type - 文件类型（可选，invoice/screenshot/attachment）")
+    public String listFiles(@P("projectName") String projectName, @P("type") String type) {
         try {
+            Project project = projectMapper.selectOne(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Project>()
+                            .eq(Project::getName, projectName));
+            if (project == null) {
+                return "未找到项目名为【" + projectName + "】的项目。";
+            }
+            Long projectId = project.getId();
             PageResult<FileVO> result = fileStorageService.listFiles(projectId, 1, 100,
                     (type == null || type.isEmpty()) ? null : type, null);
 
             if (result.getRecords().isEmpty()) {
-                return "该项目下暂无文件。";
+                return "项目【" + projectName + "】下暂无文件。";
             }
 
-            StringBuilder sb = new StringBuilder("文件列表（共 " + result.getRecords().size() + " 个文件）：\n");
+            StringBuilder sb = new StringBuilder("项目【" + projectName + "】文件列表（共 " + result.getRecords().size() + " 个文件）：\n");
             for (FileVO file : result.getRecords()) {
                 String statusStr = switch (file.getStatus()) {
                     case 0 -> "待识别";
@@ -38,7 +48,7 @@ public class FileTools {
                 };
                 String confirmedStr = file.getConfirmed() != null && file.getConfirmed() == 1 ? "✓已确认" : "未确认";
                 sb.append(String.format("- [%s] %s | 类型:%s | 状态:%s | %s",
-                        file.getId(), file.getOriginalName(),
+                        file.getId(), file.getName(),
                         file.getType() != null ? file.getType() : "-",
                         statusStr, confirmedStr));
                 if (file.getRecognitionResult() != null && file.getRecognitionResult().getTotalAmount() != null) {

@@ -1,27 +1,35 @@
 package com.aidemo.myaitravelreimbursement.agent.tools;
 
 import com.aidemo.myaitravelreimbursement.dto.request.ReportItemDTO;
+import com.aidemo.myaitravelreimbursement.dto.response.FileVO;
 import com.aidemo.myaitravelreimbursement.dto.response.ReportItemVO;
+import com.aidemo.myaitravelreimbursement.entity.Project;
 import com.aidemo.myaitravelreimbursement.entity.RecognitionResult;
 import com.aidemo.myaitravelreimbursement.entity.UploadFile;
 import com.aidemo.myaitravelreimbursement.mapper.RecognitionResultMapper;
 import com.aidemo.myaitravelreimbursement.mapper.UploadFileMapper;
 import com.aidemo.myaitravelreimbursement.service.FileStorageService;
+import com.aidemo.myaitravelreimbursement.service.ProjectService;
 import com.aidemo.myaitravelreimbursement.service.ReportService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.P;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Value;
 
 /**
- * T6 & T7 & T8: 报表工具（创建报表明细、智能填充、导出Excel）
+ * T6 & T8: 报表工具（创建报表明细、批量确认、导出Excel）
  */
 @Slf4j
 @Component
@@ -30,17 +38,31 @@ public class ReportTools {
 
     private final ReportService reportService;
     private final FileStorageService fileStorageService;
+    private final ProjectService projectService;
     private final UploadFileMapper uploadFileMapper;
     private final RecognitionResultMapper recognitionResultMapper;
 
-    @Tool("新增一条报表明细。入参：projectId - 项目ID（必填）、date - 报销日期（必填，格式 YYYY-MM-DD）、receiptType - 票据类型（必填，发票/截图）、expenseType - 费用类型（必填，transport/catering/accommodation/purchase）、amount - 金额（必填）")
+    @Autowired(required = false)
+    @Value("${storage.base-path}")
+    private String storageBasePath;
+
+    @Autowired(required = false)
+    @Value("${app.base-url:http://localhost:8080}")
+    private String appBaseUrl;
+
+    @Tool("新增一条报表明细。入参：projectName - 项目名称（必填）、date - 报销日期（必填，格式 YYYY-MM-DD）、receiptType - 票据类型（必填，发票/截图）、expenseType - 费用类型（必填，transport/catering/accommodation/purchase）、amount - 金额（必填）")
     public String createReportItem(
-            @P("projectId") Long projectId,
+            @P("projectName") String projectName,
             @P("date") String date,
             @P("receiptType") String receiptType,
             @P("expenseType") String expenseType,
             @P("amount") String amount) {
         try {
+            Project project = projectService.getProjectByName(projectName);
+            if (project == null) {
+                return "未找到项目名称【" + projectName + "】的项目。";
+            }
+
             ReportItemDTO dto = new ReportItemDTO();
             dto.setDate(LocalDate.parse(date));
             dto.setReceiptType(receiptType);
@@ -48,16 +70,18 @@ public class ReportTools {
             dto.setAmount(new java.math.BigDecimal(amount));
             dto.setHasReceipt(1);
 
-            ReportItemVO item = reportService.createItem(projectId, dto);
+            ReportItemVO item = reportService.createItem(project.getId(), dto);
             return String.format("""
                 报表明细创建成功！
                 - ID：%d
+                - 项目名称：%s
                 - 日期：%s
                 - 票据类型：%s
                 - 费用类型：%s
                 - 金额：¥%s
                 """,
                     item.getId(),
+                    projectName,
                     item.getDate(),
                     item.getReceiptType(),
                     item.getExpenseType(),
@@ -68,18 +92,69 @@ public class ReportTools {
         }
     }
 
-    @Tool("根据项目内所有已识别的文件，批量生成报表明细（一键智能填充）。入参：projectId - 项目ID（必填）、confirm - 是否确认生成（true=确认生成，false=仅预览）")
-    public String autoFillReport(@P("projectId") Long projectId, @P("confirm") Boolean confirm) {
+    @Tool("触发 Excel 导出，生成报销单文件并返回下载地址。入参：projectName - 项目名称（必填）。【重要】此方法会将 Excel 保存到磁盘并返回下载路径，请将此路径告知用户以便下载。")
+    public String exportExcel(@P("projectName") String projectName) {
         try {
+            Project project = projectService.getProjectByName(projectName);
+            if (project == null) {
+                return "未找到项目名称【" + projectName + "】的项目。";
+            }
+
+            String fileName = project.getName()
+                    + "_报销单_" + com.aidemo.myaitravelreimbursement.util.DateUtils.formatForFilename(java.time.LocalDate.now())
+                    + ".xlsx";
+
+            File destDir = new File(storageBasePath, project.getName());
+            if (!destDir.exists()) {
+                destDir.mkdirs();
+            }
+            File destFile = new File(destDir, fileName);
+
+            try (FileOutputStream fos = new FileOutputStream(destFile)) {
+                reportService.exportExcel(project.getId(), fos);
+            }
+
+            String downloadUrl = appBaseUrl + "/api/v1/projects/" + project.getId() + "/reports/export";
+            return String.format("""
+                Excel 报销单已生成！
+                - 项目名称：%s
+                - 文件名：%s
+                - 打包路径：%s
+
+                请直接在浏览器中打开以下链接下载 Excel 文件：
+                %s
+                """,
+                    project.getName(),
+                    fileName,
+                    destFile.getAbsolutePath(),
+                    downloadUrl);
+        } catch (Exception e) {
+            log.error("导出Excel失败", e);
+            return "导出Excel失败: " + e.getMessage();
+        }
+    }
+
+    @Tool("批量确认文件并自动生成报表明细。入参：projectName - 项目名称（必填）")
+    public String batchConfirm(@P("projectName") String projectName) {
+        try {
+            Project project = projectService.getProjectByName(projectName);
+            if (project == null) {
+                return "未找到项目名称【" + projectName + "】的项目。";
+            }
+            Long projectId = project.getId();
+
             List<UploadFile> files = uploadFileMapper.selectList(
                     new LambdaQueryWrapper<UploadFile>()
                             .eq(UploadFile::getProjectId, projectId)
                             .eq(UploadFile::getStatus, 2)
+                            .eq(UploadFile::getConfirmed, 0)
             );
 
             if (files.isEmpty()) {
-                return "没有已识别完成的文件，无法生成报表明细。请先对文件进行识别。";
+                return "没有待确认的文件（已识别且未确认）。";
             }
+
+            List<Long> fileIds = files.stream().map(UploadFile::getId).collect(Collectors.toList());
 
             List<String> createdItems = new ArrayList<>();
             java.math.BigDecimal totalAmount = java.math.BigDecimal.ZERO;
@@ -105,66 +180,40 @@ public class ReportTools {
                 if (amount == null) amount = java.math.BigDecimal.ZERO;
                 totalAmount = totalAmount.add(amount);
 
-                if (Boolean.TRUE.equals(confirm)) {
-                    ReportItemDTO dto = new ReportItemDTO();
-                    dto.setDate(date);
-                    dto.setReceiptType(receiptType);
-                    dto.setExpenseType(expenseType);
-                    dto.setAmount(amount);
-                    dto.setHasReceipt(1);
-                    dto.setReceiptFileId(file.getId());
-                    if (result.getAiFilename() != null) dto.setReceiptFile(result.getAiFilename());
-                    else dto.setReceiptFile(file.getOriginalName());
-                    if (result.getDescription() != null) dto.setSummary(result.getDescription());
+                ReportItemDTO dto = new ReportItemDTO();
+                dto.setDate(date);
+                dto.setReceiptType(receiptType);
+                dto.setExpenseType(expenseType);
+                dto.setAmount(amount);
+                dto.setHasReceipt(1);
+                dto.setReceiptFileId(file.getId());
+                if (result.getAiFilename() != null) dto.setReceiptFile(result.getAiFilename());
+                else dto.setReceiptFile(file.getOriginalName());
+                if (result.getDescription() != null) dto.setSummary(result.getDescription());
 
-                    reportService.createItem(projectId, dto);
-                    createdItems.add(String.format("[%s] ¥%s", file.getOriginalName(),
-                            amount.stripTrailingZeros().toPlainString()));
-                } else {
-                    createdItems.add(String.format("[%s] ¥%s | %s | %s",
-                            file.getOriginalName(),
-                            amount.stripTrailingZeros().toPlainString(),
-                            expenseType,
-                            date));
-                }
+                reportService.createItem(projectId, dto);
+                createdItems.add(String.format("[%s] ¥%s",
+                        file.getOriginalName(),
+                        amount.stripTrailingZeros().toPlainString()));
             }
 
-            if (Boolean.TRUE.equals(confirm)) {
-                return String.format("""
-                    智能填充完成！已生成 %d 条报表明细。
-                    汇总：总金额 ¥%s
-                    明细：
-                    %s
-                    """, createdItems.size(), totalAmount.stripTrailingZeros().toPlainString(),
-                        String.join("\n", createdItems));
-            } else {
-                return String.format("""
-                    【预览模式】即将生成 %d 条报表明细。
-                    预计总金额：¥%s
-                    明细：
-                    %s
-                    确认生成请回复"确认"。
-                    """, createdItems.size(), totalAmount.stripTrailingZeros().toPlainString(),
-                        String.join("\n", createdItems));
-            }
-        } catch (Exception e) {
-            log.error("智能填充失败", e);
-            return "智能填充失败: " + e.getMessage();
-        }
-    }
+            List<FileVO> confirmedFiles = fileStorageService.batchConfirm(projectId, fileIds);
 
-    @Tool("触发 Excel 导出，生成报销单文件。入参：projectId - 项目ID（必填）")
-    public String exportExcel(@P("projectId") Long projectId) {
-        try {
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            reportService.exportExcel(projectId, outputStream);
             return String.format("""
-                Excel 报销单已生成并保存！
-                项目ID：%d
-                """, projectId);
+                批量确认并生成报表明细完成！
+                - 已确认文件数：%d
+                - 已生成报表明细数：%d
+                - 汇总总金额：¥%s
+                明细：
+                %s
+                """,
+                    confirmedFiles.size(),
+                    createdItems.size(),
+                    totalAmount.stripTrailingZeros().toPlainString(),
+                    String.join("\n", createdItems));
         } catch (Exception e) {
-            log.error("导出Excel失败", e);
-            return "导出Excel失败: " + e.getMessage();
+            log.error("批量确认文件失败", e);
+            return "批量确认文件失败: " + e.getMessage();
         }
     }
 }

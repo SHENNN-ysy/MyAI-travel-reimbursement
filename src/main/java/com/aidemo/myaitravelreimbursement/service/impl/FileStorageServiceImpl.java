@@ -69,21 +69,21 @@ public class FileStorageServiceImpl implements FileStorageService {
         String storageName = UUID.randomUUID().toString().replace("-", "") + "."
                 + FileUtils.getExtension(originalName);
 
-        // 构建磁盘路径：basePath/projectId/projectName/folderName/storageName
+        // 构建磁盘路径：basePath/projectName/folderName/storageName
         // 例：D:/myAI-tool/travel-files/1/2026年5月出差/发票文件/abc123.pdf
         String relativePath;
         if (folderId != null && folderId > 0) {
             // 查询项目名和文件夹名，构建正确路径
             Project project = projectMapper.selectById(projectId);
             Folder folder = folderMapper.selectById(folderId);
-            if (project == null) {
-                throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
-            }
             // 文件夹名：子文件夹用 folder.name，主文件夹用 project.name
             String folderName = (folder.getParentId() != null && folder.getParentId() > 0)
                     ? folder.getName()
                     : project.getName();
-            relativePath = projectId + "/" + project.getName() + "/" + folderName + "/" + storageName;
+            if (project == null) {
+                throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
+            }
+            relativePath =  project.getName() + "/" + folderName + "/" + storageName;
         } else {
             // 无 folderId，回退到旧路径
             relativePath = projectId + "/0/" + storageName;

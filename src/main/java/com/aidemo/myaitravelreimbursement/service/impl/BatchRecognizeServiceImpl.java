@@ -35,7 +35,7 @@ public class BatchRecognizeServiceImpl implements BatchRecognizeService {
     private final ObjectMapper objectMapper;
 
     @Override
-    @Transactional
+    //@Transactional
     public BatchRecognizeTaskVO submitTask(Long projectId, List<Long> fileIds) {
         if (fileIds == null || fileIds.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "待识别文件列表不能为空");

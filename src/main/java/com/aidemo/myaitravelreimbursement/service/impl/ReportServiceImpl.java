@@ -307,7 +307,7 @@ public class ReportServiceImpl implements ReportService {
             // Save a copy to disk under project-specific directory
             String fileName = (project.getName() != null ? project.getName() : "项目")
                     + "_报销单_" + DateUtils.formatForFilename(java.time.LocalDate.now()) + ".xlsx";
-            File destDir = new File(storageBasePath, project.getId() + File.separator + (project.getName() != null ? project.getName() : "项目"));
+            File destDir = new File(storageBasePath,  (project.getName() != null ? project.getName() : "项目"));
             if (!destDir.exists()) {
                 destDir.mkdirs();
             }

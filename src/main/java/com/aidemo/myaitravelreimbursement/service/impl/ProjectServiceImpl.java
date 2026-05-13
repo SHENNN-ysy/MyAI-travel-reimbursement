@@ -48,6 +48,13 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     public ProjectVO create(ProjectCreateDTO dto) {
+        // 检查项目名称是否已存在
+        Long existCount = projectMapper.selectCount(
+                new LambdaQueryWrapper<Project>().eq(Project::getName, dto.getName()));
+        if (existCount > 0) {
+            throw new BusinessException(ErrorCode.BUSINESS_ERROR, "项目名称【" + dto.getName() + "】已存在，请使用其他名称");
+        }
+
         Project project = new Project();
         project.setName(dto.getName());
         project.setDestination(dto.getDestination());
@@ -89,20 +96,19 @@ public class ProjectServiceImpl implements ProjectService {
         }
 
         // 3. 在磁盘上创建物理目录结构
-        createPhysicalFolders(projectId, projectName, createdSubFolderNames);
+        createPhysicalFolders(projectName, createdSubFolderNames);
     }
 
     /**
      * 在磁盘上创建项目文件夹结构：
-     * D:/myAI-tool/travel-files/{projectId}/{projectName}/
-     * D:/myAI-tool/travel-files/{projectId}/{projectName}/发票文件/
-     * D:/myAI-tool/travel-files/{projectId}/{projectName}/付款截图/
-     * D:/myAI-tool/travel-files/{projectId}/{projectName}/附加材料/
+     * basePath/{projectName}/
+     * basePath/{projectName}/发票文件/
+     * basePath/{projectName}/付款截图/
+     * basePath/{projectName}/附加材料/
      */
-    private void createPhysicalFolders(Long projectId, String projectName, String[] subFolderNames) {
+    private void createPhysicalFolders(String projectName, String[] subFolderNames) {
         try {
-            // 主目录：basePath/projectId/projectName/
-            Path mainDir = Paths.get(storageConfig.getBasePath(), String.valueOf(projectId), projectName);
+            Path mainDir = Paths.get(storageConfig.getBasePath(), projectName);
             Files.createDirectories(mainDir);
 
             // 子目录：主目录/子文件夹名/
@@ -217,6 +223,12 @@ public class ProjectServiceImpl implements ProjectService {
             }
         }
         return total;
+    }
+
+    @Override
+    public Project getProjectByName(String name) {
+        return projectMapper.selectOne(
+                new LambdaQueryWrapper<Project>().eq(Project::getName, name));
     }
 
     @Override

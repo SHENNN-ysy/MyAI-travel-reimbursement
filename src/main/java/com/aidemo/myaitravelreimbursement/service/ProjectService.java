@@ -5,6 +5,7 @@ import com.aidemo.myaitravelreimbursement.dto.request.ProjectCreateDTO;
 import com.aidemo.myaitravelreimbursement.dto.request.ProjectUpdateDTO;
 import com.aidemo.myaitravelreimbursement.dto.response.ProjectDetailVO;
 import com.aidemo.myaitravelreimbursement.dto.response.ProjectVO;
+import com.aidemo.myaitravelreimbursement.entity.Project;
 
 import java.util.Map;
 
@@ -18,6 +19,8 @@ public interface ProjectService {
     PageResult<ProjectVO> page(int current, int size, Map<String, Object> params);
 
     ProjectDetailVO getDetail(Long id);
+
+    Project getProjectByName(String name);
 
     ProjectVO update(Long id, ProjectUpdateDTO dto);
 

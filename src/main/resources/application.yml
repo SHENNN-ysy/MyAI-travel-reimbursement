@@ -29,6 +29,10 @@ server:
   servlet:
     context-path: /api/v1
 
+# 前端访问地址（用于 AI 返回完整下载链接）
+app:
+  base-url: http://localhost:8080
+
 # 文件存储配置
 storage:
   base-path: D:/myAI-tool/travel-files

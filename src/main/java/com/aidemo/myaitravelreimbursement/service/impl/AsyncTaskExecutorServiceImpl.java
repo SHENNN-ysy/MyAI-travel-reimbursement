@@ -37,7 +37,7 @@ public class AsyncTaskExecutorServiceImpl implements AsyncTaskExecutorService {
 
     @Override
     @Async("batchRecognizeExecutor")
-    @Transactional
+    //@Transactional
     public void executeBatchRecognizeTask(String taskId) {
         log.info("开始处理批量识别任务: taskId={}", taskId);
 
