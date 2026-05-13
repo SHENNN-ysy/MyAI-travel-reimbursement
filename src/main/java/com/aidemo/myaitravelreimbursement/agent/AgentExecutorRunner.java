@@ -19,6 +19,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -53,6 +54,7 @@ public class AgentExecutorRunner {
         AtomicBoolean completed = new AtomicBoolean(false);
         long startTime = System.currentTimeMillis();
         StringBuilder assistantContent = new StringBuilder();
+        AtomicInteger toolIndexCounter = new AtomicInteger(0);
         // 批量发送 message token 的 buffer 和 flush 任务
         StringBuilder messageBuffer = new StringBuilder();
         AtomicReference<ScheduledFuture<?>> flushFutureRef = new AtomicReference<>(null);
@@ -91,12 +93,14 @@ public class AgentExecutorRunner {
                             }
                         }
                     })
-                    // 工具调用：仅发送工具名称，不发送参数（前端仅展示"正在调用 xxx"）
+                    // 工具调用：发送工具名称和批次内索引，前端据此区分并行调用
                     .onPartialToolCall((PartialToolCall partialToolCall) -> {
                         //System.out.println("partialThinking:"+partialToolCall.name());
                         if (completed.get()) return;
                         if (partialToolCall != null && partialToolCall.name() != null) {
-                            sendEvent(emitter, "tool_call", "{\"tool\": \"" + escapeJson(partialToolCall.name()) + "\"}");
+                            int idx = toolIndexCounter.getAndIncrement();
+                            sendEvent(emitter, "tool_call", "{\"toolIndex\": " + idx
+                                    + ", \"tool\": \"" + escapeJson(partialToolCall.name()) + "\"}");
                         }
                     })
                     // 工具执行完成：发送 tool_result 事件给前端，隐藏"执行中..."
@@ -104,7 +108,8 @@ public class AgentExecutorRunner {
                         if (completed.get()) return;
                         if (toolExecution != null) {
                             String resultJson = String.format(
-                                    "{\"success\": true, \"output\": \"%s\"}",
+                                    "{\"tool\": \"%s\", \"success\": true, \"output\": \"%s\"}",
+                                    escapeJson(toolExecution.request().name()),
                                     escapeJson(String.valueOf(toolExecution.result()))
                             );
                             sendEvent(emitter, "tool_result", resultJson);

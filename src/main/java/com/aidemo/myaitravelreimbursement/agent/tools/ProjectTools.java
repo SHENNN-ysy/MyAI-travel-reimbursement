@@ -85,7 +85,7 @@ public class ProjectTools {
             }
 
             File projectDir = new File(storageBasePath,
-                    project.getId() + File.separator + (project.getName() != null ? project.getName() : "项目"));
+                     (project.getName() != null ? project.getName() : "项目"));
             if (!projectDir.exists() || !projectDir.isDirectory()) {
                 return "项目文件夹不存在，无法导出。";
             }
@@ -102,13 +102,12 @@ public class ProjectTools {
             return String.format("""
                 报销项目打包导出成功！
                 - 项目名称：%s
-                - 打包文件：%s
-                【下载地址】：%s
+                【下载地址】：%s/api/v1/projects/%d/export-package
                 请复制上述下载地址，在浏览器中打开即可下载 zip 文件。
                 """,
                     project.getName(),
-                    zipFile.getAbsolutePath(),
-                    appBaseUrl + "/api/v1/projects/" + project.getId() + "/export-package");
+                    appBaseUrl,
+                    project.getId());
         } catch (Exception e) {
             log.error("导出报销项目失败", e);
             return "导出报销项目失败: " + e.getMessage();

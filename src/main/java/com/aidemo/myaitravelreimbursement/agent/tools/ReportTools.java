@@ -119,14 +119,11 @@ public class ReportTools {
                 Excel 报销单已生成！
                 - 项目名称：%s
                 - 文件名：%s
-                - 打包路径：%s
-
                 请直接在浏览器中打开以下链接下载 Excel 文件：
                 %s
                 """,
                     project.getName(),
                     fileName,
-                    destFile.getAbsolutePath(),
                     downloadUrl);
         } catch (Exception e) {
             log.error("导出Excel失败", e);
