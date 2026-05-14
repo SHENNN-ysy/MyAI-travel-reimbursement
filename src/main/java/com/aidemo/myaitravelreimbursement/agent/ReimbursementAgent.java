@@ -10,10 +10,13 @@ import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.TokenStream;
+import dev.langchain4j.skills.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+
+import java.nio.file.Path;
 
 /**
  * Agent 对话服务（基于 LangChain4j AiServices）
@@ -38,9 +41,10 @@ public class ReimbursementAgent {
      */
     public interface Assistant {
 
-        @SystemMessage(AgentSystemPrompt.SYSTEM_PROMPT)
+        //@SystemMessage(AgentSystemPrompt.SYSTEM_PROMPT)
         TokenStream chatStream(String userMessage);
     }
+
 
     /**
      * 创建 Agent 实例（每个会话独立）
@@ -49,10 +53,34 @@ public class ReimbursementAgent {
      * @param sessionId 会话 ID（用于管理 ChatMemory）
      */
     public Assistant createAssistant(String sessionId) {
+
+        //    Skills skills = Skills.from(ClassPathSkillLoader.loadSkill("skills/full"));
+        FileSystemSkill skill = ClassPathSkillLoader.loadSkill("skills/full");
+        //FileSystemSkill skill = FileSystemSkillLoader.loadSkill(Path.of("skills/full"));
+        Skill skill_full = Skill.builder()
+                .name(skill.name())
+                .description(skill.description())
+                .content(skill.content())
+                .tools(projectTools, fileTools, recognitionTools, reportTools)
+                .build();
+        Skills skills = Skills.from(skill_full);
+
         return AiServices.builder(Assistant.class)
                 .streamingChatModel(chatStreamModel)
                 .chatMemory(memoryManager.getMemory(sessionId))
-                .tools(projectTools, fileTools, recognitionTools, reportTools)
+                .tools(
+                        projectTools,
+                        fileTools,
+                        recognitionTools,
+                        reportTools
+                )
+                .toolProvider(skills.toolProvider())
+                .systemMessage(AgentSystemPrompt.SYSTEM_PROMPT)
+                // or .toolProviders(myToolProvider, skills.toolProvider()) if you already have a tool provider configured
+                .systemMessageTransformer(systemMessage -> systemMessage + "您可以使用以下技能:\n" + skills.formatAvailableSkills()
+                        + "\n当用户的请求与其中一项技能相关时，在继续之前，首先使用“activate_skill”工具激活它。")
+//                .systemMessageTransformer(systemMessage ->
+//                        AgentSystemPrompt.SYSTEM_PROMPT + skill.content())
                 .build();
     }
 }

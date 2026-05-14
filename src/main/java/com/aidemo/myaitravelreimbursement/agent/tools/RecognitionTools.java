@@ -130,10 +130,12 @@ public class RecognitionTools {
     }
 
     @Tool("等待并查询识别任务进度，阻塞约30秒后返回。入参：projectName - 项目名称（必填）。" +
-            "【重要】此方法每次调用会阻塞约30秒，最多等待5次（共约150秒）。返回任务状态、总数、已处理数、待识别文件ID列表（JSON）。" +
+            "【重要】此方法每次调用会阻塞约30秒。返回任务状态、总数、已处理数、待识别文件ID列表（JSON）。" +
             "当 status 为 pending 或 processing 时，请继续重复调用本方法直到任务完成或达到5次上限。")
     public String getRecognitionTaskProgress(@P("projectName") String projectName) {
         try {
+            Thread.sleep(30 * 1000L);
+
             Project project = projectService.getProjectByName(projectName);
             if (project == null) {
                 return "未找到项目名称【" + projectName + "】的项目。";
@@ -185,25 +187,4 @@ public class RecognitionTools {
         }
     }
 
-    @Tool("轮询识别任务进度，循环等待直到任务完成或达到5次上限。入参：projectName - 项目名称（必填）。【重要】每次查询后等待约30秒再返回结果，最多执行5次轮询（共约150秒）。当 status 为 pending 或 processing 时，会自动继续轮询直到任务完成或达到上限。返回最终的任务状态、总数、已处理数、待识别文件ID列表（JSON）。")
-    public String waitAndPollRecognition(@P("projectName") String projectName) {
-        for (int i = 0; i < 5; i++) {
-            String result = getRecognitionTaskProgress(projectName);
-            if (result == null) {
-                return "查询识别任务进度失败：返回结果为空";
-            }
-            if (result.contains("任务状态：completed") || result.contains("任务状态：failed")) {
-                return result;
-            }
-            if (i < 4) {
-                try {
-                    Thread.sleep(30_000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return "等待被中断，当前进度：" + result;
-                }
-            }
-        }
-        return "轮询已达5次上限（约150秒），任务仍未完成。请稍后手动查询最终状态。";
-    }
 }

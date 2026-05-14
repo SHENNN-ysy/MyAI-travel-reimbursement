@@ -20,8 +20,8 @@ public class FileTools {
     private final FileStorageService fileStorageService;
     private final ProjectMapper projectMapper;
 
-    @Tool("列出指定项目下的所有上传文件，支持按类型筛选。入参：projectName - 项目名称（必填）、type - 文件类型（可选，invoice/screenshot/attachment）")
-    public String listFiles(@P("projectName") String projectName, @P("type") String type) {
+    @Tool("列出指定项目下的所有上传文件，支持按类型筛选。入参：projectName - 项目名称（必填）")
+    public String listFiles(@P("projectName") String projectName) {
         try {
             Project project = projectMapper.selectOne(
                     new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Project>()
@@ -30,8 +30,7 @@ public class FileTools {
                 return "未找到项目名为【" + projectName + "】的项目。";
             }
             Long projectId = project.getId();
-            PageResult<FileVO> result = fileStorageService.listFiles(projectId, 1, 100,
-                    (type == null || type.isEmpty()) ? null : type, null);
+            PageResult<FileVO> result = fileStorageService.listFiles(projectId, 1, 100, null, null);
 
             if (result.getRecords().isEmpty()) {
                 return "项目【" + projectName + "】下暂无文件。";

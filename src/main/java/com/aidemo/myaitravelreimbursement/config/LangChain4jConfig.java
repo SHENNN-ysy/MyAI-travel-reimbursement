@@ -1,7 +1,5 @@
 package com.aidemo.myaitravelreimbursement.config;
 
-import dev.langchain4j.memory.ChatMemory;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
@@ -44,6 +42,8 @@ public class LangChain4jConfig {
                 .timeout(Duration.ofSeconds(aiProperties.getTimeout()))
                 .temperature(aiProperties.getTemperature())
                 .maxRetries(aiProperties.getMaxRetries())
+                .logRequests( true)
+                .logResponses(true)
                 .build();
     }
 
@@ -65,6 +65,8 @@ public class LangChain4jConfig {
                 .returnThinking(true)      // parse reasoning_content from response into aiMessage.thinking()
                 .sendThinking(true)        // send aiMessage.thinking() as reasoning_content in requests
                 .maxTokens(16000)
+                .logRequests( true)
+                .logResponses(true)
                 .build();
     }
 }
