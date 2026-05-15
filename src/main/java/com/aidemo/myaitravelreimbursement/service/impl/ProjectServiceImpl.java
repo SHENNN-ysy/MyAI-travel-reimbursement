@@ -233,6 +233,16 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     @Transactional
+    public void markAsProcessed(Long id) {
+        Project project = projectMapper.selectById(id);
+        if (project != null && project.getStatus() == 0) {
+            project.setStatus(1);
+            projectMapper.updateById(project);
+        }
+    }
+
+    @Override
+    @Transactional
     public ProjectVO update(Long id, ProjectUpdateDTO dto) {
         Project project = projectMapper.selectById(id);
         if (project == null) {

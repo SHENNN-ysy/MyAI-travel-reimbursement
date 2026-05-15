@@ -106,6 +106,8 @@ public class ProjectController {
         try (ZipOutputStream zos = new ZipOutputStream(response.getOutputStream())) {
             zipDirectory(projectDir, "", zos);
         }
+
+        projectService.markAsProcessed(id);
     }
 
     private void zipDirectory(File dir, String baseName, ZipOutputStream zos) throws IOException {

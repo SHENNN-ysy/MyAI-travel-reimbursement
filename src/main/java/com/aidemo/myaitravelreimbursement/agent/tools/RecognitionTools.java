@@ -46,7 +46,19 @@ public class RecognitionTools {
             if (project == null) {
                 return "未找到项目名称【" + projectName + "】的项目。";
             }
-            var task = batchRecognizeService.submitTask(project.getId(), fileIds);
+
+            // 过滤掉 type=attachment 的文件
+            List<UploadFile> files = uploadFileMapper.selectList(
+                    new LambdaQueryWrapper<UploadFile>()
+                            .in(UploadFile::getId, fileIds)
+                            .ne(UploadFile::getType, "attachment")
+            );
+            if (files.isEmpty()) {
+                return "所有指定文件均为附件类型，无需识别。";
+            }
+
+            List<Long> filteredIds = files.stream().map(UploadFile::getId).toList();
+            var task = batchRecognizeService.submitTask(project.getId(), filteredIds);
             return String.format("""
                 已提交识别任务！
                 - 任务ID：%s

@@ -38,13 +38,18 @@ public class FileTools {
 
             StringBuilder sb = new StringBuilder("项目【" + projectName + "】文件列表（共 " + result.getRecords().size() + " 个文件）：\n");
             for (FileVO file : result.getRecords()) {
-                String statusStr = switch (file.getStatus()) {
-                    case 0 -> "待识别";
-                    case 1 -> "识别中";
-                    case 2 -> "已识别";
-                    case 3 -> "识别失败";
-                    default -> "未知";
-                };
+                String statusStr;
+                if ("attachment".equals(file.getType())) {
+                    statusStr = "无需识别";
+                } else {
+                    statusStr = switch (file.getStatus()) {
+                        case 0 -> "待识别";
+                        case 1 -> "识别中";
+                        case 2 -> "已识别";
+                        case 3 -> "识别失败";
+                        default -> "未知";
+                    };
+                }
                 String confirmedStr = file.getConfirmed() != null && file.getConfirmed() == 1 ? "✓已确认" : "未确认";
                 sb.append(String.format("- [%s] %s | 类型:%s | 状态:%s | %s",
                         file.getId(), file.getName(),

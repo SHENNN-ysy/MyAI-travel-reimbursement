@@ -22,6 +22,8 @@ public interface ProjectService {
 
     Project getProjectByName(String name);
 
+    void markAsProcessed(Long id);
+
     ProjectVO update(Long id, ProjectUpdateDTO dto);
 
     void delete(Long id);

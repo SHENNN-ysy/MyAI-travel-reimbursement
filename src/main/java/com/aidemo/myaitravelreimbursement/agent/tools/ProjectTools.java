@@ -99,6 +99,8 @@ public class ProjectTools {
                 zipDirectory(projectDir, "", zos);
             }
 
+            projectService.markAsProcessed(project.getId());
+
             return String.format("""
                 报销项目打包导出成功！
                 - 项目名称：%s

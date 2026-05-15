@@ -189,6 +189,9 @@ public class FileStorageServiceImpl implements FileStorageService {
                 new LambdaQueryWrapper<RecognitionResult>().eq(RecognitionResult::getFileId, fileId)
         );
 
+        // 删除关联的报表明细（软删除）
+        reportItemMapper.softDeleteByReceiptFileId(fileId);
+
         uploadFileMapper.deleteById(fileId);
     }
 
