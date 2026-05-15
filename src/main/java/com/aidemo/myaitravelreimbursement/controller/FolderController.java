@@ -32,7 +32,7 @@ public class FolderController {
     @Operation(summary = "创建文件夹")
     @PostMapping
     public Result<FolderVO> create(@PathVariable Long projectId, @Valid @RequestBody FolderDTO dto) {
-        return Result.success(folderService.create(projectId, dto));
+        return Result.success(folderService.create(projectId, dto, null));
     }
 
     @Operation(summary = "更新文件夹")

@@ -29,6 +29,11 @@ server:
   servlet:
     context-path: /api/v1
 
+# JWT 配置
+jwt:
+  secret: MyAI-TravelReimbursement-SecretKey-2026-DoNotExpose
+  expiration: 86400000  # 24小时（毫秒）
+
 # 前端访问地址（用于 AI 返回完整下载链接）
 app:
   base-url: http://localhost:8080
@@ -67,7 +72,6 @@ knife4j:
 logging:
   level:
     com.aidemo.myaitravelreimbursement: debug
-    # 开启 OkHttp HTTP 请求/响应日志
-    okhttp: debug
+
   pattern:
     console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n"

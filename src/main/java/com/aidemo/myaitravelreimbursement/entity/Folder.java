@@ -14,6 +14,8 @@ public class Folder {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private Long userId;
+
     private Long projectId;
 
     private String name;

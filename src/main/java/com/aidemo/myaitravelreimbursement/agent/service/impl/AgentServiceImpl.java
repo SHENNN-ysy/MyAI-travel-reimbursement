@@ -3,8 +3,13 @@ package com.aidemo.myaitravelreimbursement.agent.service.impl;
 import com.aidemo.myaitravelreimbursement.agent.dto.AgentMessageDTO;
 import com.aidemo.myaitravelreimbursement.agent.dto.AgentSessionVO;
 import com.aidemo.myaitravelreimbursement.agent.service.AgentService;
+import com.aidemo.myaitravelreimbursement.common.BusinessException;
+import com.aidemo.myaitravelreimbursement.common.ErrorCode;
+import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.entity.AgentSession;
+import com.aidemo.myaitravelreimbursement.entity.Project;
 import com.aidemo.myaitravelreimbursement.mapper.AgentSessionMapper;
+import com.aidemo.myaitravelreimbursement.mapper.ProjectMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,12 +30,15 @@ import java.util.stream.Collectors;
 public class AgentServiceImpl implements AgentService {
 
     private final AgentSessionMapper sessionMapper;
+    private final ProjectMapper projectMapper;
 
     @Override
     public String createSession(Long projectId) {
+        Long userId = verifyProjectOwnership(projectId);
         String sessionId = java.util.UUID.randomUUID().toString().replace("-", "");
         AgentSession record = new AgentSession();
         record.setProjectId(projectId);
+        record.setUserId(userId);
         record.setSessionId(sessionId);
         record.setRole("user");
         record.setLastMessage("新建对话");
@@ -46,8 +54,10 @@ public class AgentServiceImpl implements AgentService {
     @Override
     @Transactional
     public void createSession(Long projectId, String sessionId, String userMessage) {
+        Long userId = verifyProjectOwnership(projectId);
         AgentSession record = new AgentSession();
         record.setProjectId(projectId);
+        record.setUserId(userId);
         record.setSessionId(sessionId);
         record.setRole("user");
         record.setLastMessage(userMessage);
@@ -62,7 +72,7 @@ public class AgentServiceImpl implements AgentService {
     @Override
     @Transactional
     public void saveAssistantMessage(String sessionId, String content) {
-        // 查找同一 sessionId 下已有记录的 projectId
+        // 查找同一 sessionId 下已有记录的 projectId 和 userId
         AgentSession existing = sessionMapper.selectOne(
                 new LambdaQueryWrapper<AgentSession>()
                         .eq(AgentSession::getSessionId, sessionId)
@@ -71,6 +81,7 @@ public class AgentServiceImpl implements AgentService {
 
         AgentSession record = new AgentSession();
         record.setProjectId(existing != null ? existing.getProjectId() : 0L);
+        record.setUserId(existing != null ? existing.getUserId() : 0L);
         record.setSessionId(sessionId);
         record.setRole("assistant");
         record.setLastMessage(content);
@@ -84,6 +95,7 @@ public class AgentServiceImpl implements AgentService {
 
     @Override
     public List<AgentSessionVO> listSessions(Long projectId) {
+        verifyProjectOwnership(projectId);
         // 每个 sessionId 只取最新一条（id 最大的），用于展示会话列表
         List<AgentSession> records = sessionMapper.selectList(
                 new LambdaQueryWrapper<AgentSession>()
@@ -108,6 +120,7 @@ public class AgentServiceImpl implements AgentService {
 
     @Override
     public List<AgentMessageDTO> getSessionDetail(String sessionId) {
+        verifySessionOwnership(sessionId);
         // 按 id 升序查询 = 时间正序
         List<AgentSession> records = sessionMapper.selectList(
                 new LambdaQueryWrapper<AgentSession>()
@@ -127,11 +140,39 @@ public class AgentServiceImpl implements AgentService {
     @Override
     @Transactional
     public void deleteSession(String sessionId) {
+        verifySessionOwnership(sessionId);
         sessionMapper.delete(
                 new LambdaQueryWrapper<AgentSession>()
                         .eq(AgentSession::getSessionId, sessionId)
         );
         log.info("删除会话: sessionId={}", sessionId);
+    }
+
+    private Long verifyProjectOwnership(Long projectId) {
+        Long userId = UserContext.getUserId();
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
+        }
+        if (!userId.equals(project.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该项目");
+        }
+        return userId;
+    }
+
+    private void verifySessionOwnership(String sessionId) {
+        Long userId = UserContext.getUserId();
+        AgentSession record = sessionMapper.selectOne(
+                new LambdaQueryWrapper<AgentSession>()
+                        .eq(AgentSession::getSessionId, sessionId)
+                        .last("LIMIT 1")
+        );
+        if (record == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "会话不存在");
+        }
+        if (!userId.equals(record.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该会话");
+        }
     }
 
     private AgentSessionVO toSessionVO(AgentSession record) {

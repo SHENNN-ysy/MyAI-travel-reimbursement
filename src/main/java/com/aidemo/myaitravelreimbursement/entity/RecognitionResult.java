@@ -16,6 +16,8 @@ public class RecognitionResult {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private Long userId;
+
     private Long projectId;
 
     private Long fileId;

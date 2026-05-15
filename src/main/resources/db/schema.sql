@@ -9,6 +9,7 @@ USE travel_db;
 -- 1. 报销项目表
 CREATE TABLE IF NOT EXISTS t_project (
   id           BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id      BIGINT NOT NULL DEFAULT 0 COMMENT '所属用户ID',
   name         VARCHAR(100) NOT NULL COMMENT '项目名称',
   destination  VARCHAR(200) COMMENT '目的地',
   start_date   DATE COMMENT '开始日期',
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS t_project (
 -- 2. 文件夹目录表
 CREATE TABLE IF NOT EXISTS t_folder (
   id         BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id    BIGINT NOT NULL DEFAULT 0 COMMENT '所属用户ID',
   project_id BIGINT NOT NULL COMMENT '所属项目ID',
   name       VARCHAR(100) NOT NULL COMMENT '文件夹名称',
   type       VARCHAR(20) COMMENT '文件夹类型: invoice/screenshot/attachment',
@@ -41,6 +43,7 @@ CREATE TABLE IF NOT EXISTS t_folder (
 -- 3. 上传文件表
 CREATE TABLE IF NOT EXISTS t_upload_file (
   id                  BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id             BIGINT NOT NULL DEFAULT 0 COMMENT '所属用户ID',
   project_id          BIGINT NOT NULL COMMENT '所属项目ID',
   folder_id           BIGINT COMMENT '所属文件夹ID',
   name                VARCHAR(255) NOT NULL COMMENT '存储文件名',
@@ -61,6 +64,7 @@ CREATE TABLE IF NOT EXISTS t_upload_file (
 -- 4. AI识别结果表
 CREATE TABLE IF NOT EXISTS t_recognition_result (
   id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id         BIGINT NOT NULL DEFAULT 0 COMMENT '所属用户ID',
   project_id      BIGINT NOT NULL COMMENT '所属项目ID(冗余字段)',
   file_id         BIGINT NOT NULL UNIQUE COMMENT '关联文件ID',
   type            VARCHAR(20) COMMENT '识别类型: invoice/screenshot',
@@ -86,6 +90,7 @@ CREATE TABLE IF NOT EXISTS t_recognition_result (
 -- 5. 报表明细表
 CREATE TABLE IF NOT EXISTS t_report_item (
   id               BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id          BIGINT NOT NULL DEFAULT 0 COMMENT '所属用户ID',
   project_id       BIGINT NOT NULL COMMENT '所属项目ID',
   date             DATE NOT NULL COMMENT '报销日期',
   receipt_type     VARCHAR(50) NOT NULL COMMENT '票据类型: 发票/截图',
@@ -106,6 +111,7 @@ CREATE TABLE IF NOT EXISTS t_report_item (
 -- 5.1 批量识别任务表
 CREATE TABLE IF NOT EXISTS t_batch_recognize_task (
   id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id     BIGINT NOT NULL DEFAULT 0 COMMENT '所属用户ID',
   task_id     VARCHAR(64) NOT NULL UNIQUE COMMENT '任务ID(UUID)',
   project_id  BIGINT NOT NULL COMMENT '所属项目ID',
   file_ids    TEXT COMMENT '待识别文件ID列表(JSON)',
@@ -148,8 +154,8 @@ ALTER TABLE t_report_item
 CREATE TABLE IF NOT EXISTS t_agent_session (
   id              BIGINT PRIMARY KEY AUTO_INCREMENT,
   project_id      BIGINT NOT NULL COMMENT '所属项目ID',
+  user_id         BIGINT NOT NULL DEFAULT 0 COMMENT '用户ID',
   session_id      VARCHAR(64) NOT NULL COMMENT '会话唯一ID（UUID）',
-  user_id         VARCHAR(100) COMMENT '用户标识',
   role            VARCHAR(20) NOT NULL DEFAULT 'user' COMMENT '消息角色: user=用户消息, assistant=AI回复',
   last_message    TEXT COMMENT '对话内容',
   status          TINYINT DEFAULT 0 COMMENT '0-活跃 1-已完成',
@@ -177,6 +183,20 @@ CREATE TABLE IF NOT EXISTS t_agent_task_log (
 -- =============================================
 -- 数据库升级 ALTER 语句（用于已有数据库升级）
 -- =============================================
+
+-- t_user: 用户表
+CREATE TABLE IF NOT EXISTS t_user (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username    VARCHAR(50)  NOT NULL UNIQUE COMMENT '用户名',
+    password    VARCHAR(255) NOT NULL COMMENT '密码（明文存储）',
+    nickname    VARCHAR(50)  DEFAULT '' COMMENT '昵称',
+    email       VARCHAR(100) DEFAULT '' COMMENT '邮箱',
+    status      TINYINT      DEFAULT 1 COMMENT '1=启用 0=禁用',
+    deleted     TINYINT      DEFAULT 0 COMMENT '逻辑删除',
+    create_time DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_username (username)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
 
 -- t_project: budget 从 DECIMAL 改为 VARCHAR
 -- ALTER TABLE t_project MODIFY COLUMN budget VARCHAR(100) COMMENT '预算项目名称（文本）';
@@ -216,9 +236,3 @@ CREATE TABLE IF NOT EXISTS t_agent_task_log (
 -- 4) 添加索引
 -- ALTER TABLE t_agent_session ADD INDEX idx_session_id (session_id);
 -- ALTER TABLE t_agent_session ADD INDEX idx_project_session (project_id, session_id);
-DROP TABLE IF EXISTS t_agent_session;
-DELETE FROM t_recognition_result WHERE deleted = 1;
-DELETE FROM t_upload_file WHERE deleted = 1;
-ALTER TABLE t_batch_recognize_task
-ADD COLUMN deleted TINYINT DEFAULT 0 COMMENT '逻辑删除: 0-未删除, 1-已删除' AFTER error_msg;
-DELETE FROM t_batch_recognize_task

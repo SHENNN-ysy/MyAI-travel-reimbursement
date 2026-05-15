@@ -3,6 +3,7 @@ package com.aidemo.myaitravelreimbursement.service.impl;
 import com.aidemo.myaitravelreimbursement.common.BusinessException;
 import com.aidemo.myaitravelreimbursement.common.ErrorCode;
 import com.aidemo.myaitravelreimbursement.common.PageResult;
+import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.config.StorageConfig;
 import com.aidemo.myaitravelreimbursement.dto.request.FolderDTO;
 import com.aidemo.myaitravelreimbursement.dto.request.ProjectCreateDTO;
@@ -48,14 +49,18 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     public ProjectVO create(ProjectCreateDTO dto) {
-        // 检查项目名称是否已存在
+        Long userId = UserContext.getUserId();
+        // 检查项目名称是否已存在（同一用户下）
         Long existCount = projectMapper.selectCount(
-                new LambdaQueryWrapper<Project>().eq(Project::getName, dto.getName()));
+                new LambdaQueryWrapper<Project>()
+                        .eq(Project::getUserId, userId)
+                        .eq(Project::getName, dto.getName()));
         if (existCount > 0) {
             throw new BusinessException(ErrorCode.BUSINESS_ERROR, "项目名称【" + dto.getName() + "】已存在，请使用其他名称");
         }
 
         Project project = new Project();
+        project.setUserId(userId);
         project.setName(dto.getName());
         project.setDestination(dto.getDestination());
         project.setStartDate(dto.getStartDate());
@@ -68,16 +73,16 @@ public class ProjectServiceImpl implements ProjectService {
         project.setStatus(0);
         projectMapper.insert(project);
 
-        createDefaultFolders(project.getId(), dto.getName());
+        createDefaultFolders(project.getId(), dto.getName(), userId);
         return ProjectVO.fromEntity(project);
     }
 
-    private void createDefaultFolders(Long projectId, String projectName) {
+    private void createDefaultFolders(Long projectId, String projectName, Long userId) {
         // 1. 创建数据库记录：主文件夹（与项目同名）
         FolderDTO parentDto = new FolderDTO();
         parentDto.setName(projectName);
         parentDto.setSortOrder(0);
-        FolderVO parentFolder = folderService.create(projectId, parentDto);
+        FolderVO parentFolder = folderService.create(projectId, parentDto, userId);
 
         // 2. 创建三个子文件夹：发票文件、付款截图、附加材料
         String[] subNames = {"发票文件", "付款截图", "附加材料"};
@@ -91,7 +96,7 @@ public class ProjectServiceImpl implements ProjectService {
             subDto.setType(subTypes[i]);
             subDto.setParentId(parentFolder.getId());
             subDto.setSortOrder(subOrders[i]);
-            folderService.create(projectId, subDto);
+            folderService.create(projectId, subDto, userId);
             createdSubFolderNames[i] = subNames[i];
         }
 
@@ -124,8 +129,10 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public PageResult<ProjectVO> page(int current, int size, Map<String, Object> params) {
+        Long userId = UserContext.getUserId();
         Page<Project> page = new Page<>(current, size);
         LambdaQueryWrapper<Project> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Project::getUserId, userId);
 
         if (params != null) {
             String name = (String) params.get("name");
@@ -158,9 +165,13 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public ProjectDetailVO getDetail(Long id) {
+        Long userId = UserContext.getUserId();
         Project project = projectMapper.selectById(id);
         if (project == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
+        }
+        if (!userId.equals(project.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该项目");
         }
         ProjectDetailVO vo = ProjectDetailVO.fromEntity(project);
 
@@ -227,15 +238,19 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public Project getProjectByName(String name) {
+        Long userId = UserContext.getUserId();
         return projectMapper.selectOne(
-                new LambdaQueryWrapper<Project>().eq(Project::getName, name));
+                new LambdaQueryWrapper<Project>()
+                        .eq(Project::getUserId, userId)
+                        .eq(Project::getName, name));
     }
 
     @Override
     @Transactional
     public void markAsProcessed(Long id) {
         Project project = projectMapper.selectById(id);
-        if (project != null && project.getStatus() == 0) {
+        Long userId = UserContext.getUserId();
+        if (project != null && project.getStatus() == 0 && userId.equals(project.getUserId())) {
             project.setStatus(1);
             projectMapper.updateById(project);
         }
@@ -244,9 +259,13 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     public ProjectVO update(Long id, ProjectUpdateDTO dto) {
+        Long userId = UserContext.getUserId();
         Project project = projectMapper.selectById(id);
         if (project == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
+        }
+        if (!userId.equals(project.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改该项目");
         }
 
         if (dto.getName() != null) project.setName(dto.getName());
@@ -267,8 +286,13 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     public void delete(Long id) {
-        if (projectMapper.selectById(id) == null) {
+        Long userId = UserContext.getUserId();
+        Project project = projectMapper.selectById(id);
+        if (project == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
+        }
+        if (!userId.equals(project.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权删除该项目");
         }
 
         // 1. 软删除该项目

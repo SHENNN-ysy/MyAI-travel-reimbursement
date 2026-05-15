@@ -10,7 +10,7 @@ import java.util.List;
  */
 public interface FolderService {
 
-    FolderVO create(Long projectId, FolderDTO dto);
+    FolderVO create(Long projectId, FolderDTO dto, Long userId);
 
     List<FolderVO> getTree(Long projectId);
 

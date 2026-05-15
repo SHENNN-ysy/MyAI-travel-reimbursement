@@ -3,6 +3,7 @@ package com.aidemo.myaitravelreimbursement.service.impl;
 import com.aidemo.myaitravelreimbursement.common.BusinessException;
 import com.aidemo.myaitravelreimbursement.common.ErrorCode;
 import com.aidemo.myaitravelreimbursement.common.PageResult;
+import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.constant.ExpenseType;
 import com.aidemo.myaitravelreimbursement.dto.request.ReportItemDTO;
 import com.aidemo.myaitravelreimbursement.dto.response.ReportItemVO;
@@ -52,6 +53,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     public PageResult<ReportItemVO> pageItems(Long projectId, int current, int size, String receiptType) {
+        verifyProjectOwnership(projectId);
         Page<ReportItem> page = new Page<>(current, size);
         LambdaQueryWrapper<ReportItem> wrapper = new LambdaQueryWrapper<ReportItem>()
                 .eq(ReportItem::getProjectId, projectId)
@@ -72,6 +74,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     public List<ReportItemVO> listItems(Long projectId, String receiptType) {
+        verifyProjectOwnership(projectId);
         LambdaQueryWrapper<ReportItem> wrapper = new LambdaQueryWrapper<ReportItem>()
                 .eq(ReportItem::getProjectId, projectId)
                 .orderByDesc(ReportItem::getDate);
@@ -88,7 +91,9 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public ReportItemVO createItem(Long projectId, ReportItemDTO dto) {
+        Long userId = verifyProjectOwnership(projectId).getUserId();
         ReportItem item = new ReportItem();
+        item.setUserId(userId);
         item.setProjectId(projectId);
         item.setDate(dto.getDate());
         item.setReceiptType(dto.getReceiptType());
@@ -110,6 +115,10 @@ public class ReportServiceImpl implements ReportService {
         if (item == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "报表明细不存在");
         }
+        Long userId = UserContext.getUserId();
+        if (!userId.equals(item.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改该报表明细");
+        }
         if (dto.getDate() != null) item.setDate(dto.getDate());
         if (dto.getReceiptType() != null) item.setReceiptType(dto.getReceiptType());
         if (dto.getExpenseType() != null) item.setExpenseType(dto.getExpenseType());
@@ -126,18 +135,20 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional
     public void deleteItem(Long id) {
-        if (reportItemMapper.selectById(id) == null) {
+        ReportItem item = reportItemMapper.selectById(id);
+        if (item == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "报表明细不存在");
+        }
+        Long userId = UserContext.getUserId();
+        if (!userId.equals(item.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权删除该报表明细");
         }
         reportItemMapper.deleteById(id);
     }
 
     @Override
     public ReportSummaryVO getSummary(Long projectId) {
-        Project project = projectMapper.selectById(projectId);
-        if (project == null) {
-            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
-        }
+        Project project = verifyProjectOwnership(projectId);
 
         List<ReportItem> items = reportItemMapper.selectList(
                 new LambdaQueryWrapper<ReportItem>().eq(ReportItem::getProjectId, projectId)
@@ -189,10 +200,7 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     public void exportExcel(Long projectId, OutputStream outputStream) {
-        Project project = projectMapper.selectById(projectId);
-        if (project == null) {
-            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
-        }
+        Project project = verifyProjectOwnership(projectId);
 
         List<ReportItem> items = reportItemMapper.selectList(
                 new LambdaQueryWrapper<ReportItem>()
@@ -369,5 +377,17 @@ public class ReportServiceImpl implements ReportService {
             vo.setReceiptFileName(item.getReceiptFile());
         }
         return vo;
+    }
+
+    private Project verifyProjectOwnership(Long projectId) {
+        Long userId = UserContext.getUserId();
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
+        }
+        if (!userId.equals(project.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该项目");
+        }
+        return project;
     }
 }

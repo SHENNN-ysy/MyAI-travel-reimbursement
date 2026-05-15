@@ -2,9 +2,12 @@ package com.aidemo.myaitravelreimbursement.service.impl;
 
 import com.aidemo.myaitravelreimbursement.common.BusinessException;
 import com.aidemo.myaitravelreimbursement.common.ErrorCode;
+import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.dto.response.BatchRecognizeTaskVO;
 import com.aidemo.myaitravelreimbursement.entity.BatchRecognizeTask;
+import com.aidemo.myaitravelreimbursement.entity.Project;
 import com.aidemo.myaitravelreimbursement.mapper.BatchRecognizeTaskMapper;
+import com.aidemo.myaitravelreimbursement.mapper.ProjectMapper;
 import com.aidemo.myaitravelreimbursement.mapper.UploadFileMapper;
 import com.aidemo.myaitravelreimbursement.service.AiRecognitionService;
 import com.aidemo.myaitravelreimbursement.service.AsyncTaskExecutorService;
@@ -29,6 +32,7 @@ import java.util.*;
 public class BatchRecognizeServiceImpl implements BatchRecognizeService {
 
     private final BatchRecognizeTaskMapper taskMapper;
+    private final ProjectMapper projectMapper;
     private final UploadFileMapper uploadFileMapper;
     private final AiRecognitionService aiRecognitionService;
     private final AsyncTaskExecutorService asyncTaskExecutorService;
@@ -37,6 +41,7 @@ public class BatchRecognizeServiceImpl implements BatchRecognizeService {
     @Override
     //@Transactional
     public BatchRecognizeTaskVO submitTask(Long projectId, List<Long> fileIds) {
+        Long userId = verifyProjectOwnership(projectId);
         if (fileIds == null || fileIds.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "待识别文件列表不能为空");
         }
@@ -50,6 +55,7 @@ public class BatchRecognizeServiceImpl implements BatchRecognizeService {
         }
 
         BatchRecognizeTask task = new BatchRecognizeTask();
+        task.setUserId(userId);
         task.setTaskId(taskId);
         task.setProjectId(projectId);
         task.setFileIds(fileIdsJson);
@@ -74,6 +80,10 @@ public class BatchRecognizeServiceImpl implements BatchRecognizeService {
 
         if (task == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "任务不存在或已过期");
+        }
+        Long userId = UserContext.getUserId();
+        if (!userId.equals(task.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看该任务");
         }
 
         List<BatchRecognizeTaskVO.FileRecognitionResult> results = parseResults(task.getResults());
@@ -117,5 +127,17 @@ public class BatchRecognizeServiceImpl implements BatchRecognizeService {
             log.error("解析识别结果失败: {}", resultsJson, e);
             return new ArrayList<>();
         }
+    }
+
+    private Long verifyProjectOwnership(Long projectId) {
+        Long userId = UserContext.getUserId();
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
+        }
+        if (!userId.equals(project.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该项目");
+        }
+        return userId;
     }
 }

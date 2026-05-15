@@ -2,6 +2,7 @@ package com.aidemo.myaitravelreimbursement.service.impl;
 
 import com.aidemo.myaitravelreimbursement.common.BusinessException;
 import com.aidemo.myaitravelreimbursement.common.ErrorCode;
+import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.config.StorageConfig;
 import com.aidemo.myaitravelreimbursement.constant.FileStatus;
 import com.aidemo.myaitravelreimbursement.dto.request.FileUpdateDTO;
@@ -56,6 +57,8 @@ public class FileStorageServiceImpl implements FileStorageService {
     @Override
     @Transactional
     public FileVO upload(Long projectId, Long folderId, String type, MultipartFile file) throws IOException {
+        Long userId = verifyProjectOwnership(projectId);
+
         if (file.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "上传文件不能为空");
         }
@@ -80,9 +83,6 @@ public class FileStorageServiceImpl implements FileStorageService {
             String folderName = (folder.getParentId() != null && folder.getParentId() > 0)
                     ? folder.getName()
                     : project.getName();
-            if (project == null) {
-                throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
-            }
             relativePath =  project.getName() + "/" + folderName + "/" + storageName;
         } else {
             // 无 folderId，回退到旧路径
@@ -97,6 +97,7 @@ public class FileStorageServiceImpl implements FileStorageService {
         Files.copy(file.getInputStream(), Paths.get(fullPath), StandardCopyOption.REPLACE_EXISTING);
 
         UploadFile uploadFile = new UploadFile();
+        uploadFile.setUserId(userId);
         uploadFile.setProjectId(projectId);
         uploadFile.setFolderId(folderId != null ? folderId : 0L);
         uploadFile.setName(storageName);
@@ -112,6 +113,7 @@ public class FileStorageServiceImpl implements FileStorageService {
         // 上传成功后立即创建一条空的 RecognitionResult 记录
         // 后续 AI 识别时更新该记录，未识别前各字段均为 null
         RecognitionResult emptyResult = new RecognitionResult();
+        emptyResult.setUserId(userId);
         emptyResult.setProjectId(projectId);
         emptyResult.setFileId(uploadFile.getId());
         emptyResult.setType(type);
@@ -120,11 +122,27 @@ public class FileStorageServiceImpl implements FileStorageService {
         return FileVO.fromEntity(uploadFile, emptyResult);
     }
 
+    private Long verifyProjectOwnership(Long projectId) {
+        Long userId = UserContext.getUserId();
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
+        }
+        if (!userId.equals(project.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该项目");
+        }
+        return userId;
+    }
+
     @Override
     public FileVO getFile(Long fileId) {
         UploadFile file = uploadFileMapper.selectById(fileId);
         if (file == null) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND);
+        }
+        Long userId = UserContext.getUserId();
+        if (!userId.equals(file.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该文件");
         }
         // 查询该文件的 AI 识别结果
         RecognitionResult result = recognitionResultMapper.selectOne(
@@ -138,6 +156,7 @@ public class FileStorageServiceImpl implements FileStorageService {
 
     @Override
     public com.aidemo.myaitravelreimbursement.common.PageResult<FileVO> listFiles(Long projectId, int current, int size, String type, String expenseType) {
+        verifyProjectOwnership(projectId);
         Page<UploadFile> page = new Page<>(current, size);
         LambdaQueryWrapper<UploadFile> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(UploadFile::getProjectId, projectId);
@@ -177,6 +196,10 @@ public class FileStorageServiceImpl implements FileStorageService {
         if (file == null) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND);
         }
+        Long userId = UserContext.getUserId();
+        if (!userId.equals(file.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权删除该文件");
+        }
 
         String fullPath = storageConfig.getBasePath() + "/" + file.getStoragePath();
         java.io.File physicalFile = new java.io.File(fullPath);
@@ -201,6 +224,10 @@ public class FileStorageServiceImpl implements FileStorageService {
         UploadFile file = uploadFileMapper.selectById(fileId);
         if (file == null) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND);
+        }
+        Long userId = UserContext.getUserId();
+        if (!userId.equals(file.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改该文件");
         }
 
         // 1. 更新文件基本信息
@@ -228,6 +255,7 @@ public class FileStorageServiceImpl implements FileStorageService {
             result = new RecognitionResult();
             result.setFileId(fileId);
             result.setProjectId(file.getProjectId());
+            result.setUserId(file.getUserId());
             fillRecognitionResult(result, dto);
             recognitionResultMapper.insert(result);
         } else {
@@ -288,6 +316,7 @@ public class FileStorageServiceImpl implements FileStorageService {
     @Override
     @Transactional
     public List<FileVO> batchConfirm(Long projectId, List<Long> fileIds) {
+        verifyProjectOwnership(projectId);
         List<FileVO> results = new ArrayList<>();
         for (Long fileId : fileIds) {
             UploadFile file = uploadFileMapper.selectById(fileId);
@@ -331,6 +360,10 @@ public class FileStorageServiceImpl implements FileStorageService {
         UploadFile file = uploadFileMapper.selectById(fileId);
         if (file == null) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND);
+        }
+        Long userId = UserContext.getUserId();
+        if (!userId.equals(file.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权操作该文件");
         }
         // 将确认状态改为未确认
         file.setConfirmed(0);
@@ -445,7 +478,9 @@ public class FileStorageServiceImpl implements FileStorageService {
             reportItemMapper.updateById(softDeletedItem);
         } else {
             // 无任何记录 → 新建
+            Long currentUserId = UserContext.getUserId();
             ReportItem item = new ReportItem();
+            item.setUserId(currentUserId);
             item.setProjectId(file.getProjectId());
             item.setDate(date);
             item.setReceiptType(receiptType);
@@ -465,6 +500,10 @@ public class FileStorageServiceImpl implements FileStorageService {
         UploadFile file = uploadFileMapper.selectById(fileId);
         if (file == null) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND);
+        }
+        Long userId = UserContext.getUserId();
+        if (!userId.equals(file.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权下载该文件");
         }
         String fullPath = storageConfig.getBasePath() + "/" + file.getStoragePath();
         try {

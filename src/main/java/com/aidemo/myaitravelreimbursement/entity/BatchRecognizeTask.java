@@ -15,6 +15,8 @@ public class BatchRecognizeTask {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private Long userId;
+
     /** 任务唯一标识（UUID） */
     private String taskId;
 

@@ -2,10 +2,13 @@ package com.aidemo.myaitravelreimbursement.service.impl;
 
 import com.aidemo.myaitravelreimbursement.common.BusinessException;
 import com.aidemo.myaitravelreimbursement.common.ErrorCode;
+import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.dto.request.FolderDTO;
 import com.aidemo.myaitravelreimbursement.dto.response.FolderVO;
 import com.aidemo.myaitravelreimbursement.entity.Folder;
+import com.aidemo.myaitravelreimbursement.entity.Project;
 import com.aidemo.myaitravelreimbursement.mapper.FolderMapper;
+import com.aidemo.myaitravelreimbursement.mapper.ProjectMapper;
 import com.aidemo.myaitravelreimbursement.mapper.UploadFileMapper;
 import com.aidemo.myaitravelreimbursement.service.FolderService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -26,12 +29,19 @@ import java.util.Map;
 public class FolderServiceImpl implements FolderService {
 
     private final FolderMapper folderMapper;
+    private final ProjectMapper projectMapper;
     private final UploadFileMapper uploadFileMapper;
 
     @Override
-    public FolderVO create(Long projectId, FolderDTO dto) {
+    public FolderVO create(Long projectId, FolderDTO dto, Long userId) {
+        Long currentUserId = (userId != null) ? userId : UserContext.getUserId();
+        Project project = projectMapper.selectById(projectId);
+        if (project == null || !currentUserId.equals(project.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权在该项目下创建文件夹");
+        }
         Folder folder = new Folder();
         folder.setProjectId(projectId);
+        folder.setUserId(currentUserId);
         folder.setName(dto.getName());
         folder.setType(dto.getType());
         folder.setParentId(dto.getParentId() != null ? dto.getParentId() : 0L);
@@ -42,6 +52,7 @@ public class FolderServiceImpl implements FolderService {
 
     @Override
     public List<FolderVO> getTree(Long projectId) {
+        verifyProjectOwnership(projectId);
         LambdaQueryWrapper<Folder> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Folder::getProjectId, projectId)
                 .orderByAsc(Folder::getSortOrder)
@@ -85,6 +96,10 @@ public class FolderServiceImpl implements FolderService {
         if (folder == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "文件夹不存在");
         }
+        Long userId = UserContext.getUserId();
+        if (!userId.equals(folder.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改该文件夹");
+        }
         if (dto.getName() != null) {
             folder.setName(dto.getName());
         }
@@ -101,8 +116,13 @@ public class FolderServiceImpl implements FolderService {
     @Override
     @Transactional
     public void delete(Long id) {
-        if (folderMapper.selectById(id) == null) {
+        Folder folder = folderMapper.selectById(id);
+        if (folder == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "文件夹不存在");
+        }
+        Long userId = UserContext.getUserId();
+        if (!userId.equals(folder.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权删除该文件夹");
         }
         folderMapper.deleteById(id);
     }
@@ -110,7 +130,16 @@ public class FolderServiceImpl implements FolderService {
     @Override
     @Transactional
     public void deleteByProjectId(Long projectId) {
+        verifyProjectOwnership(projectId);
         folderMapper.delete(new LambdaQueryWrapper<Folder>()
                 .eq(Folder::getProjectId, projectId));
+    }
+
+    private void verifyProjectOwnership(Long projectId) {
+        Long userId = UserContext.getUserId();
+        Project project = projectMapper.selectById(projectId);
+        if (project == null || !userId.equals(project.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该项目");
+        }
     }
 }

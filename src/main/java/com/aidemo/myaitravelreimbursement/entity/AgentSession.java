@@ -16,12 +16,12 @@ public class AgentSession {
 
     private Long projectId;
 
+    private Long userId;
+
     /**
      * 会话唯一ID（同一会话可有多条记录）
      */
     private String sessionId;
-
-    private String userId;
 
     /**
      * 消息角色: user=用户消息, assistant=AI回复
