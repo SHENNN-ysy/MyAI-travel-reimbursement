@@ -82,7 +82,7 @@ public class BatchRecognizeServiceImpl implements BatchRecognizeService {
             throw new BusinessException(ErrorCode.NOT_FOUND, "任务不存在或已过期");
         }
         Long userId = UserContext.getUserId();
-        if (!userId.equals(task.getUserId())) {
+        if (!Objects.equals(userId, task.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看该任务");
         }
 
@@ -135,7 +135,7 @@ public class BatchRecognizeServiceImpl implements BatchRecognizeService {
         if (project == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
         }
-        if (!userId.equals(project.getUserId())) {
+        if (!Objects.equals(userId, project.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该项目");
         }
         return userId;

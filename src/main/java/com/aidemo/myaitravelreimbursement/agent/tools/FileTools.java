@@ -1,6 +1,7 @@
 package com.aidemo.myaitravelreimbursement.agent.tools;
 
 import com.aidemo.myaitravelreimbursement.common.PageResult;
+import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.dto.response.FileVO;
 import com.aidemo.myaitravelreimbursement.entity.Project;
 import com.aidemo.myaitravelreimbursement.mapper.ProjectMapper;
@@ -22,6 +23,10 @@ public class FileTools {
 
     @Tool("列出指定项目下的所有上传文件，支持按类型筛选。入参：projectName - 项目名称（必填）")
     public String listFiles(@P("projectName") String projectName) {
+        UserContext.Snapshot snapshot = UserContext.getCurrentSnapshot();
+        if (snapshot != null) {
+            UserContext.restore(snapshot);
+        }
         try {
             Project project = projectMapper.selectOne(
                     new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Project>()

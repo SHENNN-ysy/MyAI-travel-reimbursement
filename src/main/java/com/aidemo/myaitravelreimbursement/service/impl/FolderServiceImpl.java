@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 文件夹服务实现
@@ -97,7 +98,7 @@ public class FolderServiceImpl implements FolderService {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "文件夹不存在");
         }
         Long userId = UserContext.getUserId();
-        if (!userId.equals(folder.getUserId())) {
+        if (!Objects.equals(userId, folder.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改该文件夹");
         }
         if (dto.getName() != null) {
@@ -121,7 +122,7 @@ public class FolderServiceImpl implements FolderService {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "文件夹不存在");
         }
         Long userId = UserContext.getUserId();
-        if (!userId.equals(folder.getUserId())) {
+        if (!Objects.equals(userId, folder.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权删除该文件夹");
         }
         folderMapper.deleteById(id);
@@ -138,7 +139,7 @@ public class FolderServiceImpl implements FolderService {
     private void verifyProjectOwnership(Long projectId) {
         Long userId = UserContext.getUserId();
         Project project = projectMapper.selectById(projectId);
-        if (project == null || !userId.equals(project.getUserId())) {
+        if (project == null || !Objects.equals(userId, project.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该项目");
         }
     }

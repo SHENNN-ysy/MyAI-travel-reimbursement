@@ -6,6 +6,11 @@ import com.aidemo.myaitravelreimbursement.agent.tools.FileTools;
 import com.aidemo.myaitravelreimbursement.agent.tools.ProjectTools;
 import com.aidemo.myaitravelreimbursement.agent.tools.RecognitionTools;
 import com.aidemo.myaitravelreimbursement.agent.tools.ReportTools;
+import dev.langchain4j.mcp.McpToolProvider;
+import dev.langchain4j.mcp.client.DefaultMcpClient;
+import dev.langchain4j.mcp.client.McpClient;
+import dev.langchain4j.mcp.client.transport.McpTransport;
+import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.rag.DefaultRetrievalAugmentor;
@@ -18,7 +23,10 @@ import dev.langchain4j.rag.query.transformer.QueryTransformer;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.TokenStream;
+import dev.langchain4j.service.tool.ToolProvider;
 import dev.langchain4j.skills.*;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +35,9 @@ import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Agent 对话服务（基于 LangChain4j AiServices）
@@ -55,6 +65,50 @@ public class ReimbursementAgent {
 
     @Resource
     private ContentRetriever emptyRetriever;
+
+
+    // ========== MCP Excel 工具提供者 ==========
+    private ToolProvider excelMcpToolProvider;
+    private McpClient excelMcpClient;
+
+    @PostConstruct
+    public void initMcpClient() {
+        try {
+            // Windows: 使用 cmd /c 执行 npx
+            McpTransport transport = StdioMcpTransport.builder()
+                    .command(List.of("cmd", "/c", "npx", "--yes", "@negokaz/excel-mcp-server"))
+                    .logEvents(true)
+                    .build();
+
+            excelMcpClient = DefaultMcpClient.builder()
+                    .key("excel-mcp")
+                    .transport(transport)
+                    .build();
+
+            excelMcpToolProvider = McpToolProvider.builder()
+                    .mcpClients(excelMcpClient)
+                    .build();
+
+
+            log.info("Excel MCP 客户端初始化成功");
+        } catch (Exception e) {
+            log.warn("Excel MCP 客户端初始化失败，将不启用 Excel 工具: {}", e.getMessage());
+            // 不抛异常，避免影响主业务
+        }
+    }
+
+    @PreDestroy
+    public void closeMcpClient() {
+        if (excelMcpClient != null) {
+            try {
+                excelMcpClient.close();
+                log.info("Excel MCP 客户端已关闭");
+            } catch (Exception e) {
+                log.warn("关闭 Excel MCP 客户端时出错: {}", e.getMessage());
+            }
+        }
+    }
+
     /**
      * Agent 内部接口 — 定义 AI 助手的对话行为
      * AiServices 自动生成代理实现，处理 Tool Calling 和 ChatMemory
@@ -74,27 +128,17 @@ public class ReimbursementAgent {
      */
     public Assistant createAssistant(String sessionId) {
 
-        //QueryTransformer queryTransformer = new CompressingQueryTransformer(chatModel);
+        QueryTransformer queryTransformer = new CompressingQueryTransformer(chatModel);
         //QueryTransformer queryTransformer1 = new ExpandingQueryTransformer(chatModel());
         Map<ContentRetriever, String> retrieverToDescription = new HashMap<>();
-//        retrieverToDescription.put(capability_contentRetriever, "AI报销助手--工具能力说明，包含自动化工具能力、一键全流程、使用限制；【重要：仅在用户需要了解AI报销助手时进行自我介绍时使用，不参与实际工作流】");
-//        retrieverToDescription.put(userguide_contentRetriever, "AI报销助手--产品介绍使用说明，包含基本操作、使用技巧、报销全流程操作说明、常见问题、注意事项；【重要：仅在用户需要了解AI报销助手时进行自我介绍时使用，不参与实际工作流】");
-//        retrieverToDescription.put(emptyRetriever, "闲聊、问候、天气、不相关话题，或其他不属于上述内容的问题");
-        retrieverToDescription.put(userguide_contentRetriever,
-                "AI报销助手的产品介绍使用说明，包含基本操作、使用技巧、报销全流程操作说明、常见问题、注意事项" +
-                        "仅在用户明确询问「AI报销助手是什么」「怎么使用」「有哪些功能介绍」时才使用。"
-                        + "如果用户是在请求完成实际报销操作、执行工作流、提交报销单等任务，不要选择此源。");
-        retrieverToDescription.put(capability_contentRetriever,
-                "AI报销助手的工具能力说明，包含自动化工具能力、一键全流程、使用限制。" +
-                        "仅在用户询问工具的技术细节与说明、调用限制时才使用。"
-                        + "如果用户请求完成实际报销操作、执行工作流等，不要选择此源。");
-        retrieverToDescription.put(emptyRetriever,
-                         "如果用户请求在需要执行明确的任务，如完成报销流程、执行报销，识别发票等操作，请选择此源（实际报销任务由工具执行，不从文档检索）");
+        retrieverToDescription.put(userguide_contentRetriever, "AI报销助手--产品介绍使用说明，包含报销流程、操作步骤、使用技巧、工具介绍、常见问题解答等文档");
+        retrieverToDescription.put(capability_contentRetriever, "AI报销助手--工具操作能力说明，包含报销流程、工具能力介绍、调用方式、输入输出说明等文档");
+        retrieverToDescription.put(emptyRetriever, "闲聊、问候、天气、不相关话题，或其他不属于上述技术/职业的问题");
 
         QueryRouter queryRouter = new LanguageModelQueryRouter(chatModel, retrieverToDescription);
 
         RetrievalAugmentor retrievalAugmentor = DefaultRetrievalAugmentor.builder()
-                //.queryTransformer(queryTransformer)
+                .queryTransformer(queryTransformer)
                 .queryRouter(queryRouter)
                 .build();
 
@@ -107,10 +151,10 @@ public class ReimbursementAgent {
                 .build();
         Skills skills = Skills.from(skill_full);
 
-        return AiServices.builder(Assistant.class)
+        AiServices<Assistant> builder = AiServices.builder(Assistant.class)
                 .streamingChatModel(chatStreamModel)
                 .chatMemory(memoryManager.getMemory(sessionId))
-                .retrievalAugmentor(retrievalAugmentor)
+                //.retrievalAugmentor(retrievalAugmentor)
                 .tools(
                         projectTools,
                         fileTools,
@@ -118,10 +162,16 @@ public class ReimbursementAgent {
                         reportTools
                 )
                 .toolProvider(skills.toolProvider())
+                .toolProvider(excelMcpToolProvider)
                 .systemMessage(AgentSystemPrompt.SYSTEM_PROMPT)
-                // or .toolProviders(myToolProvider, skills.toolProvider()) if you already have a tool provider configured
                 .systemMessageTransformer(systemMessage -> systemMessage + "您可以使用以下技能:\n" + skills.formatAvailableSkills()
-                        + "\n当用户的请求与其中一项技能相关时，在继续之前，首先使用“activate_skill”工具激活它。")
-                .build();
+                        + "\n当用户的请求与其中一项技能相关时，在继续之前，首先使用\"activate_skill\"工具激活它。");
+
+        // 如果 MCP 初始化成功，则添加 Excel 工具
+        if (excelMcpToolProvider != null) {
+            builder.toolProvider(excelMcpToolProvider);
+        }
+
+        return builder.build();
     }
 }

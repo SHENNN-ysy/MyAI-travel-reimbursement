@@ -37,6 +37,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -128,7 +129,7 @@ public class FileStorageServiceImpl implements FileStorageService {
         if (project == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
         }
-        if (!userId.equals(project.getUserId())) {
+        if (!Objects.equals(userId, project.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该项目");
         }
         return userId;
@@ -141,7 +142,7 @@ public class FileStorageServiceImpl implements FileStorageService {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND);
         }
         Long userId = UserContext.getUserId();
-        if (!userId.equals(file.getUserId())) {
+        if (!Objects.equals(userId, file.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该文件");
         }
         // 查询该文件的 AI 识别结果
@@ -197,7 +198,7 @@ public class FileStorageServiceImpl implements FileStorageService {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND);
         }
         Long userId = UserContext.getUserId();
-        if (!userId.equals(file.getUserId())) {
+        if (!Objects.equals(userId, file.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权删除该文件");
         }
 
@@ -226,7 +227,7 @@ public class FileStorageServiceImpl implements FileStorageService {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND);
         }
         Long userId = UserContext.getUserId();
-        if (!userId.equals(file.getUserId())) {
+        if (!Objects.equals(userId, file.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改该文件");
         }
 
@@ -362,7 +363,7 @@ public class FileStorageServiceImpl implements FileStorageService {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND);
         }
         Long userId = UserContext.getUserId();
-        if (!userId.equals(file.getUserId())) {
+        if (!Objects.equals(userId, file.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权操作该文件");
         }
         // 将确认状态改为未确认
@@ -502,7 +503,7 @@ public class FileStorageServiceImpl implements FileStorageService {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND);
         }
         Long userId = UserContext.getUserId();
-        if (!userId.equals(file.getUserId())) {
+        if (!Objects.equals(userId, file.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权下载该文件");
         }
         String fullPath = storageConfig.getBasePath() + "/" + file.getStoragePath();

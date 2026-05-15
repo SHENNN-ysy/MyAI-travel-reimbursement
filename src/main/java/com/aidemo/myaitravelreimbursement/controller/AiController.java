@@ -11,6 +11,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Objects;
+
 /**
  * AI 识别控制器
  */
@@ -30,7 +32,7 @@ public class AiController {
             @RequestParam(defaultValue = "invoice") String type) {
         Long userId = UserContext.getUserId();
         UploadFile file = uploadFileMapper.selectById(fileId);
-        if (file == null || !userId.equals(file.getUserId())) {
+        if (file == null || !Objects.equals(userId, file.getUserId())) {
             throw new com.aidemo.myaitravelreimbursement.common.BusinessException(
                     com.aidemo.myaitravelreimbursement.common.ErrorCode.FORBIDDEN, "无权识别该文件");
         }

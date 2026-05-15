@@ -32,6 +32,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 项目服务实现
@@ -170,7 +171,7 @@ public class ProjectServiceImpl implements ProjectService {
         if (project == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
         }
-        if (!userId.equals(project.getUserId())) {
+        if (!Objects.equals(userId, project.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该项目");
         }
         ProjectDetailVO vo = ProjectDetailVO.fromEntity(project);
@@ -250,7 +251,7 @@ public class ProjectServiceImpl implements ProjectService {
     public void markAsProcessed(Long id) {
         Project project = projectMapper.selectById(id);
         Long userId = UserContext.getUserId();
-        if (project != null && project.getStatus() == 0 && userId.equals(project.getUserId())) {
+        if (project != null && project.getStatus() == 0 && Objects.equals(userId, project.getUserId())) {
             project.setStatus(1);
             projectMapper.updateById(project);
         }
@@ -264,7 +265,7 @@ public class ProjectServiceImpl implements ProjectService {
         if (project == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
         }
-        if (!userId.equals(project.getUserId())) {
+        if (!Objects.equals(userId, project.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改该项目");
         }
 
@@ -291,7 +292,7 @@ public class ProjectServiceImpl implements ProjectService {
         if (project == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
         }
-        if (!userId.equals(project.getUserId())) {
+        if (!Objects.equals(userId, project.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权删除该项目");
         }
 

@@ -1,7 +1,10 @@
 package com.aidemo.myaitravelreimbursement.agent;
 
 import com.aidemo.myaitravelreimbursement.agent.service.AgentService;
+import com.aidemo.myaitravelreimbursement.common.BusinessException;
+import com.aidemo.myaitravelreimbursement.common.ErrorCode;
 import com.aidemo.myaitravelreimbursement.common.Result;
+import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.entity.Project;
 import com.aidemo.myaitravelreimbursement.mapper.ProjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.Objects;
 
 /**
  * Agent 对话控制器
@@ -35,10 +40,14 @@ public class AgentChatController {
     public SseEmitter chat(@PathVariable Long projectId,
                            @RequestParam(required = false) String sessionId,
                            @RequestParam String message) {
-        // 验证项目存在
+        // 验证项目归属
+        Long userId = UserContext.getUserId();
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
-            throw new IllegalArgumentException("项目不存在: " + projectId);
+            throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
+        }
+        if (!Objects.equals(userId, project.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该项目");
         }
 
         if (message == null || message.isBlank()) {
@@ -61,8 +70,9 @@ public class AgentChatController {
         emitter.onTimeout(() -> log.debug("SSE timeout: projectId={}, sessionId={}", projectId, finalSessionId));
         emitter.onError(e -> log.error("SSE error: projectId={}, sessionId={}", projectId, finalSessionId, e));
 
-        // 异步流式执行 Agent（打字机效果）
-        agentExecutorRunner.executeStreamAsync(projectId, sessionId, message, emitter);
+        // 异步流式执行 Agent（打字机效果），传递用户上下文快照以支持跨线程
+        UserContext.Snapshot snapshot = UserContext.capture();
+        agentExecutorRunner.executeStreamAsync(projectId, sessionId, message, emitter, snapshot);
 
         // 立即返回 emitter（前端开始接收 SSE 事件）
         return emitter;

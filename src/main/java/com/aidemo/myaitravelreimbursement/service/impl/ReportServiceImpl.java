@@ -35,6 +35,7 @@ import java.math.BigDecimal;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 报表服务实现
@@ -116,7 +117,7 @@ public class ReportServiceImpl implements ReportService {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "报表明细不存在");
         }
         Long userId = UserContext.getUserId();
-        if (!userId.equals(item.getUserId())) {
+        if (!Objects.equals(userId, item.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改该报表明细");
         }
         if (dto.getDate() != null) item.setDate(dto.getDate());
@@ -140,7 +141,7 @@ public class ReportServiceImpl implements ReportService {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "报表明细不存在");
         }
         Long userId = UserContext.getUserId();
-        if (!userId.equals(item.getUserId())) {
+        if (!Objects.equals(userId, item.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权删除该报表明细");
         }
         reportItemMapper.deleteById(id);
@@ -385,7 +386,7 @@ public class ReportServiceImpl implements ReportService {
         if (project == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
         }
-        if (!userId.equals(project.getUserId())) {
+        if (!Objects.equals(userId, project.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该项目");
         }
         return project;

@@ -2,6 +2,7 @@ package com.aidemo.myaitravelreimbursement.controller;
 
 import com.aidemo.myaitravelreimbursement.common.PageResult;
 import com.aidemo.myaitravelreimbursement.common.Result;
+import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.dto.request.ReportItemDTO;
 import com.aidemo.myaitravelreimbursement.dto.response.ReportItemVO;
 import com.aidemo.myaitravelreimbursement.dto.response.ReportSummaryVO;
@@ -21,6 +22,7 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 报表管理控制器
@@ -84,7 +86,16 @@ public class ReportController {
     @Operation(summary = "导出Excel报销单")
     @GetMapping("/export")
     public void exportExcel(@PathVariable Long projectId, HttpServletResponse response) throws IOException {
+        Long userId = UserContext.getUserId();
         Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        if (!Objects.equals(userId, project.getUserId())) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            return;
+        }
         String fileName = (project != null ? project.getName() : "项目")
                 + "_报销单_" + DateUtils.formatForFilename(java.time.LocalDate.now()) + ".xlsx";
 

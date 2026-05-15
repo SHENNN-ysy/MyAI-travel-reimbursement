@@ -1,6 +1,7 @@
 package com.aidemo.myaitravelreimbursement.agent;
 
 import com.aidemo.myaitravelreimbursement.agent.service.AgentService;
+import com.aidemo.myaitravelreimbursement.common.UserContext;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.PartialThinking;
 import dev.langchain4j.model.chat.response.PartialToolCall;
@@ -46,7 +47,12 @@ public class AgentExecutorRunner {
      */
     @Async("agentExecutor")
     public CompletableFuture<Void> executeStreamAsync(Long projectId, String sessionId,
-                                                     String message, SseEmitter emitter) {
+                                                     String message, SseEmitter emitter,
+                                                     UserContext.Snapshot userContextSnapshot) {
+        // 在异步线程中恢复用户上下文，确保 Tool 调用链能获取到 userId
+        UserContext.restore(userContextSnapshot);
+        UserContext.setCurrentSnapshot(userContextSnapshot);
+
         emitter.onCompletion(() -> log.debug("SSE completed: projectId={}, sessionId={}", projectId, sessionId));
         emitter.onTimeout(() -> log.debug("SSE timeout: projectId={}, sessionId={}", projectId, sessionId));
         emitter.onError(e -> log.error("SSE error: projectId={}, sessionId={}", projectId, sessionId, e));
@@ -126,6 +132,7 @@ public class AgentExecutorRunner {
                                 saveAssistantMessage(sessionId, assistantContent.toString());
                                 sendEvent(emitter, "done", "{\"summary\": \"\"}");
                                 emitter.complete();
+                                UserContext.clearCurrentSnapshot();
                                 long elapsed = System.currentTimeMillis() - startTime;
                                 log.info("Agent stream completed: sessionId={}, elapsed={}ms, response length={}",
                                         sessionId, elapsed, assistantContent.length());
@@ -144,6 +151,7 @@ public class AgentExecutorRunner {
                                 saveAssistantMessage(sessionId, assistantContent.toString());
                                 sendEvent(emitter, "error", "{\"error\": \"" + escapeJson(error.getMessage()) + "\"}");
                                 emitter.completeWithError(error);
+                                UserContext.clearCurrentSnapshot();
                             } catch (Exception e) {
                                 log.warn("Failed to complete SSE with error", e);
                             }
@@ -161,6 +169,7 @@ public class AgentExecutorRunner {
                     saveAssistantMessage(sessionId, assistantContent.toString());
                     sendEvent(emitter, "error", "{\"error\": \"" + escapeJson(e.getMessage()) + "\"}");
                     emitter.completeWithError(e);
+                    UserContext.clearCurrentSnapshot();
                 } catch (Exception ex) {
                     log.warn("Failed to complete SSE with error", ex);
                 }

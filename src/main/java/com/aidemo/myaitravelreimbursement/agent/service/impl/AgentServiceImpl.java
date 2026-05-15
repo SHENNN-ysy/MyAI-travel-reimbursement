@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -154,7 +155,7 @@ public class AgentServiceImpl implements AgentService {
         if (project == null) {
             throw new BusinessException(ErrorCode.DATA_NOT_FOUND, "项目不存在");
         }
-        if (!userId.equals(project.getUserId())) {
+        if (!Objects.equals(userId, project.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该项目");
         }
         return userId;
@@ -170,7 +171,7 @@ public class AgentServiceImpl implements AgentService {
         if (record == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "会话不存在");
         }
-        if (!userId.equals(record.getUserId())) {
+        if (!Objects.equals(userId, record.getUserId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该会话");
         }
     }

@@ -3,6 +3,7 @@ package com.aidemo.myaitravelreimbursement.controller;
 import com.aidemo.myaitravelreimbursement.common.ErrorCode;
 import com.aidemo.myaitravelreimbursement.common.PageResult;
 import com.aidemo.myaitravelreimbursement.common.Result;
+import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.dto.request.BatchRecognizeRequestDTO;
 import com.aidemo.myaitravelreimbursement.dto.request.FileUpdateDTO;
 import com.aidemo.myaitravelreimbursement.dto.response.BatchRecognizeTaskVO;
@@ -23,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 文件管理控制器
@@ -85,6 +87,10 @@ public class FileController {
         if (file == null) {
             return Result.error(ErrorCode.FILE_NOT_FOUND);
         }
+        Long userId = UserContext.getUserId();
+        if (!Objects.equals(userId, file.getUserId())) {
+            return Result.error(ErrorCode.FORBIDDEN);
+        }
         String type = file.getType() != null ? file.getType() : "invoice";
         return Result.success(aiRecognitionService.recognize(fileId, type));
     }
@@ -123,6 +129,11 @@ public class FileController {
         UploadFile file = uploadFileMapper.selectById(fileId);
         if (file == null) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        Long userId = UserContext.getUserId();
+        if (!Objects.equals(userId, file.getUserId())) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             return;
         }
         byte[] data = fileStorageService.downloadFile(fileId);

@@ -2,6 +2,7 @@ package com.aidemo.myaitravelreimbursement.controller;
 
 import com.aidemo.myaitravelreimbursement.common.PageResult;
 import com.aidemo.myaitravelreimbursement.common.Result;
+import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.dto.request.ProjectCreateDTO;
 import com.aidemo.myaitravelreimbursement.dto.request.ProjectUpdateDTO;
 import com.aidemo.myaitravelreimbursement.dto.response.ProjectDetailVO;
@@ -22,6 +23,7 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -81,10 +83,16 @@ public class ProjectController {
     @Operation(summary = "导出报销项目（打包下载）")
     @GetMapping("/{id}/export-package")
     public void exportPackage(@PathVariable Long id, HttpServletResponse response) throws IOException {
+        // 验证用户归属
+        Long userId = UserContext.getUserId();
         com.aidemo.myaitravelreimbursement.entity.Project project =
                 projectMapper.selectById(id);
         if (project == null) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        if (!Objects.equals(userId, project.getUserId())) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             return;
         }
 

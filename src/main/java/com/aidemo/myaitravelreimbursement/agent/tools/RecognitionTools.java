@@ -143,6 +143,7 @@ public class RecognitionTools {
 
     @Tool("等待并查询识别任务进度，阻塞约30秒后返回。入参：projectName - 项目名称（必填）。" +
             "【重要】此方法每次调用会阻塞约30秒。返回任务状态、总数、已处理数、待识别文件ID列表（JSON）。" +
+            "如果识别超时（150 秒内未完成）或者有文件识别失败，停止执行后续步骤，告诉用户结果并在最终回复中标注超时警告和识别的结果"+
             "当 status 为 pending 或 processing 时，请继续重复调用本方法直到任务完成或达到5次上限。")
     public String getRecognitionTaskProgress(@P("projectName") String projectName) {
         try {
