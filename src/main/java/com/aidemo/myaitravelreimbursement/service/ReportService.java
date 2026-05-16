@@ -5,7 +5,6 @@ import com.aidemo.myaitravelreimbursement.dto.request.ReportItemDTO;
 import com.aidemo.myaitravelreimbursement.dto.response.ReportItemVO;
 import com.aidemo.myaitravelreimbursement.dto.response.ReportSummaryVO;
 
-import java.io.OutputStream;
 import java.util.List;
 
 /**
@@ -25,5 +24,5 @@ public interface ReportService {
 
     ReportSummaryVO getSummary(Long projectId);
 
-    void exportExcel(Long projectId, OutputStream outputStream);
+    byte[] generateExcel(Long projectId);
 }

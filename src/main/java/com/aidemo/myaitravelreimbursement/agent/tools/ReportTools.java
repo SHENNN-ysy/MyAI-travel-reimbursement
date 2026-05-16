@@ -47,7 +47,7 @@ public class ReportTools {
     private String storageBasePath;
 
     @Autowired(required = false)
-    @Value("${app.base-url:http://localhost:8080}")
+    @Value("${app.base-url:http://localhost:8080/api/v1}")
     private String appBaseUrl;
 
     @Tool("新增一条报表明细。入参：projectName - 项目名称（必填）、date - 报销日期（必填，格式 YYYY-MM-DD）、receiptType - 票据类型（必填，发票/截图）、expenseType - 费用类型（必填，transport/catering/accommodation/purchase）、amount - 金额（必填）")
@@ -92,7 +92,7 @@ public class ReportTools {
         }
     }
 
-    @Tool("触发 Excel 导出，生成报销单文件并返回下载地址。入参：projectName - 项目名称（必填）。【重要】此方法会将 Excel 保存到磁盘并返回下载路径，请将此路径告知用户以便下载。")
+    @Tool("触发 Excel 导出，生成报销单文件并返回下载地址。入参：projectName - 项目名称（必填）。【重要】此方法会将 Excel 保存到磁盘并返回下载地址，请将此路径告知用户以便下载。")
     public String exportExcel(@P("projectName") String projectName) {
         try {
             Project project = projectService.getProjectByName(projectName);
@@ -100,21 +100,22 @@ public class ReportTools {
                 return "未找到项目名称【" + projectName + "】的项目。";
             }
 
+            byte[] excelBytes = reportService.generateExcel(project.getId());
+
             String fileName = project.getName()
-                    + "_报销单_" + com.aidemo.myaitravelreimbursement.util.DateUtils.formatForFilename(java.time.LocalDate.now())
-                    + ".xlsx";
+                    + "_报销单.xlsx";
 
             File destDir = new File(storageBasePath, project.getName());
             if (!destDir.exists()) {
                 destDir.mkdirs();
             }
             File destFile = new File(destDir, fileName);
-
             try (FileOutputStream fos = new FileOutputStream(destFile)) {
-                reportService.exportExcel(project.getId(), fos);
+                fos.write(excelBytes);
             }
+            log.info("Excel已保存到: {}", destFile.getAbsolutePath());
 
-            String downloadUrl = appBaseUrl + "/api/v1/projects/" + project.getId() + "/reports/export";
+            String downloadUrl = appBaseUrl + "/projects/" + project.getId() + "/reports/export";
             return String.format("""
                 Excel 报销单已生成！
                 - 项目名称：%s
@@ -139,24 +140,13 @@ public class ReportTools {
                 return "未找到项目名称【" + projectName + "】的项目。";
             }
 
-            File projectDir = new File(storageBasePath, project.getName());
-            if (!projectDir.exists() || !projectDir.isDirectory()) {
+            File destFile = new File(new File(storageBasePath, project.getName()),
+                    project.getName() + "_报销单.xlsx");
+            if (!destFile.exists()) {
                 return "项目【" + projectName + "】下暂无报销 Excel 文件。";
             }
 
-            File[] excelFiles = projectDir.listFiles((dir, name) ->
-                    name.endsWith(".xlsx") && name.contains("_报销单_"));
-
-            if (excelFiles == null || excelFiles.length == 0) {
-                return "项目【" + projectName + "】下暂无报销 Excel 文件。";
-            }
-
-            StringBuilder result = new StringBuilder("项目【" + projectName + "】下的报销 Excel 文件路径：\n");
-            for (File file : excelFiles) {
-                result.append("- ").append(file.getAbsolutePath()).append("\n");
-            }
-
-            return result.toString().trim();
+            return "项目【" + projectName + "】下的报销 Excel 文件路径：\n- " + destFile.getAbsolutePath();
         } catch (Exception e) {
             log.error("获取Excel文件路径失败", e);
             return "获取Excel文件路径失败: " + e.getMessage();

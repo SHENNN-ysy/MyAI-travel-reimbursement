@@ -4,7 +4,6 @@ import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.entity.User;
 import com.aidemo.myaitravelreimbursement.mapper.UserMapper;
 import com.aidemo.myaitravelreimbursement.utils.JwtUtil;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

@@ -9,15 +9,17 @@ import com.aidemo.myaitravelreimbursement.dto.response.ReportSummaryVO;
 import com.aidemo.myaitravelreimbursement.entity.Project;
 import com.aidemo.myaitravelreimbursement.mapper.ProjectMapper;
 import com.aidemo.myaitravelreimbursement.service.ReportService;
-import com.aidemo.myaitravelreimbursement.util.DateUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -85,7 +87,9 @@ public class ReportController {
 
     @Operation(summary = "导出Excel报销单")
     @GetMapping("/export")
-    public void exportExcel(@PathVariable Long projectId, HttpServletResponse response) throws IOException {
+    public void exportExcel(@PathVariable Long projectId,
+                            @Value("${storage.base-path}") String storageBasePath,
+                            HttpServletResponse response) throws IOException {
         Long userId = UserContext.getUserId();
         Project project = projectMapper.selectById(projectId);
         if (project == null) {
@@ -96,14 +100,23 @@ public class ReportController {
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             return;
         }
-        String fileName = (project != null ? project.getName() : "项目")
-                + "_报销单_" + DateUtils.formatForFilename(java.time.LocalDate.now()) + ".xlsx";
+        String fileName = project.getName()
+                + "_报销单.xlsx";
+        File destFile = new File(new File(storageBasePath, project.getName()), fileName);
+
+        if (!destFile.exists()) {
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
 
         response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
         response.setHeader("Content-Disposition",
                 "attachment; filename=\"" + URLEncoder.encode(fileName, StandardCharsets.UTF_8) + "\"");
         response.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+        response.setContentLengthLong(destFile.length());
 
-        reportService.exportExcel(projectId, response.getOutputStream());
+        try (FileInputStream fis = new FileInputStream(destFile)) {
+            fis.transferTo(response.getOutputStream());
+        }
     }
 }

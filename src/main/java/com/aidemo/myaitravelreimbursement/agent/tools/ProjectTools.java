@@ -32,7 +32,7 @@ public class ProjectTools {
     @Value("${storage.base-path}")
     private String storageBasePath;
 
-    @Value("${app.base-url:http://localhost:8080}")
+    @Value("${app.base-url:http://localhost:8080/api/v1}")
     private String appBaseUrl;
 
     @Tool("获取指定项目的基本信息，包括项目名称、日期、人员、预算、状态等。")
@@ -104,7 +104,7 @@ public class ProjectTools {
             return String.format("""
                 报销项目打包导出成功！
                 - 项目名称：%s
-                【下载地址】：%s/api/v1/projects/%d/export-package
+                【下载地址】：%s/projects/%d/export-package
                 请复制上述下载地址，在浏览器中打开即可下载 zip 文件。
                 """,
                     project.getName(),

@@ -24,13 +24,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -48,9 +45,6 @@ public class ReportServiceImpl implements ReportService {
     private final ReportItemMapper reportItemMapper;
     private final ProjectMapper projectMapper;
     private final UploadFileMapper uploadFileMapper;
-
-    @Value("${storage.base-path}")
-    private String storageBasePath;
 
     @Override
     public PageResult<ReportItemVO> pageItems(Long projectId, int current, int size, String receiptType) {
@@ -200,7 +194,7 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public void exportExcel(Long projectId, OutputStream outputStream) {
+    public byte[] generateExcel(Long projectId) {
         Project project = verifyProjectOwnership(projectId);
 
         List<ReportItem> items = reportItemMapper.selectList(
@@ -209,7 +203,6 @@ public class ReportServiceImpl implements ReportService {
                         .orderByAsc(ReportItem::getDate)
         );
 
-        // Sort by expense type: transport > accommodation > purchase > catering
         List<ReportItem> sortedItems = items.stream()
                 .sorted(Comparator.comparingInt(item -> {
                     String type = item.getExpenseType() != null ? item.getExpenseType() : "";
@@ -232,14 +225,12 @@ public class ReportServiceImpl implements ReportService {
 
             Sheet sheet = workbook.createSheet("报销单");
 
-            // Row 0: Section title "汇总信息"
             Row section0 = sheet.createRow(0);
             Cell section0Cell = section0.createCell(0);
             section0Cell.setCellValue("【汇总信息】");
             section0Cell.setCellStyle(sectionTitleStyle);
             sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 7));
 
-            // Row 1: Summary headers (8 columns)
             Row summaryHeader = sheet.createRow(1);
             String[] summaryHeaders = {"项目名称", "出差人", "部门", "起始日期", "结束日期", "总天数", "总金额", "出差项目"};
             for (int i = 0; i < summaryHeaders.length; i++) {
@@ -248,7 +239,6 @@ public class ReportServiceImpl implements ReportService {
                 cell.setCellStyle(headerStyle);
             }
 
-            // Row 2: Summary data
             Row summaryData = sheet.createRow(2);
             long totalDays = 0;
             if (project.getStartDate() != null && project.getEndDate() != null) {
@@ -266,17 +256,14 @@ public class ReportServiceImpl implements ReportService {
                 summaryData.getCell(i).setCellStyle(dataStyle);
             }
 
-            // Row 3: blank separator
             sheet.createRow(3);
 
-            // Row 4: Section title "明细信息"
             Row section1 = sheet.createRow(4);
             Cell section1Cell = section1.createCell(0);
             section1Cell.setCellValue("【明细信息】");
             section1Cell.setCellStyle(sectionTitleStyle);
             sheet.addMergedRegion(new CellRangeAddress(4, 4, 0, 6));
 
-            // Row 5: Detail headers (7 columns)
             Row detailHeader = sheet.createRow(5);
             String[] detailHeaders = {"票据类型", "日期", "消费类型", "票据文件", "摘要", "金额", "备注"};
             for (int i = 0; i < detailHeaders.length; i++) {
@@ -285,7 +272,6 @@ public class ReportServiceImpl implements ReportService {
                 cell.setCellStyle(headerStyle);
             }
 
-            // Detail data rows start from row 6
             int rowNum = 6;
             for (ReportItem item : sortedItems) {
                 Row row = sheet.createRow(rowNum++);
@@ -301,7 +287,6 @@ public class ReportServiceImpl implements ReportService {
                 }
             }
 
-            // Set column widths: col0=project name wider, col3=receipt file widest
             sheet.setColumnWidth(0, 6000);
             sheet.setColumnWidth(1, 4000);
             sheet.setColumnWidth(2, 3500);
@@ -311,22 +296,12 @@ public class ReportServiceImpl implements ReportService {
             sheet.setColumnWidth(6, 4500);
             sheet.setColumnWidth(7, 4500);
 
-            workbook.write(outputStream);
-
-            // Save a copy to disk under project-specific directory
-            String fileName = (project.getName() != null ? project.getName() : "项目")
-                    + "_报销单_" + ".xlsx";
-            File destDir = new File(storageBasePath,  (project.getName() != null ? project.getName() : "项目"));
-            if (!destDir.exists()) {
-                destDir.mkdirs();
-            }
-            File destFile = new File(destDir, fileName);
-            try (FileOutputStream fos = new FileOutputStream(destFile)) {
-                workbook.write(fos);
-                log.info("Excel已保存到: {}", destFile.getAbsolutePath());
+            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                workbook.write(baos);
+                return baos.toByteArray();
             }
         } catch (Exception e) {
-            log.error("导出Excel失败", e);
+            log.error("生成Excel失败", e);
             throw new BusinessException(ErrorCode.EXPORT_ERROR, "导出失败: " + e.getMessage());
         }
     }
