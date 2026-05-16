@@ -54,7 +54,7 @@ public class RecognitionTools {
                             .ne(UploadFile::getType, "attachment")
             );
             if (files.isEmpty()) {
-                return "所有指定文件均为附件类型，无需识别。";
+                return "所有指定文件中，所有的发票和截图文件都已识别。";
             }
 
             List<Long> filteredIds = files.stream().map(UploadFile::getId).toList();
@@ -72,8 +72,7 @@ public class RecognitionTools {
         }
     }
 
-    @Tool("获取项目内所有文件的 AI 识别结果。入参：projectName - 项目名称（必填）"+
-            "【重要】如果有文件识别失败，停止执行后续步骤，告诉用户结果并在最终回复中标注识别的结果")
+    @Tool("获取项目内所有文件的 AI 识别结果。入参：projectName - 项目名称（必填）")
     public String getRecognitionResults(@P("projectName") String projectName) {
         try {
             Project project = projectService.getProjectByName(projectName);
@@ -103,13 +102,18 @@ public class RecognitionTools {
                                 .last("LIMIT 1")
                 );
 
-                String statusStr = switch (file.getStatus()) {
-                    case 0 -> "待识别";
-                    case 1 -> "识别中";
-                    case 2 -> "已识别";
-                    case 3 -> "识别失败";
-                    default -> "未知";
-                };
+                String statusStr;
+                if ("attachment".equals(file.getType())) {
+                    statusStr = "无需识别";
+                } else {
+                    statusStr = switch (file.getStatus()) {
+                        case 0 -> "待识别";
+                        case 1 -> "识别中";
+                        case 2 -> "已识别";
+                        case 3 -> "识别失败";
+                        default -> "未知";
+                    };
+                }
 
                 sb.append(String.format("- [%d] %s | %s",
                         file.getId(), file.getName(), statusStr));
@@ -143,8 +147,7 @@ public class RecognitionTools {
     }
 
     @Tool("等待并查询识别任务进度，阻塞约30秒后返回。入参：projectName - 项目名称（必填）。" +
-            "【重要】此方法每次调用会阻塞约30秒。返回任务状态、总数、已处理数、待识别文件ID列表（JSON），" +
-            "如果识别超时（150 秒内未完成），停止执行后续步骤，告诉用户结果并在最终回复中标注超时警告和识别的结果，"+
+            "【重要】此方法每次调用会阻塞约30秒。返回任务状态、总数、已处理数、待识别文件ID列表（JSON）。" +
             "当 status 为 pending 或 processing 时，请继续重复调用本方法直到任务完成或达到5次上限。")
     public String getRecognitionTaskProgress(@P("projectName") String projectName) {
         try {

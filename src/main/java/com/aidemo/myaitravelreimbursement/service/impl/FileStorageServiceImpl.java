@@ -70,8 +70,23 @@ public class FileStorageServiceImpl implements FileStorageService {
                     "不支持的文件类型: " + FileUtils.getExtension(originalName));
         }
 
-        String storageName = UUID.randomUUID().toString().replace("-", "") + "."
-                + FileUtils.getExtension(originalName);
+        String storageName;
+        if ("attachment".equals(type)) {
+            // 附件类型：检查同名文件是否已存在，存在则拒绝入库
+            Long count = uploadFileMapper.selectCount(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UploadFile>()
+                            .eq(UploadFile::getProjectId, projectId)
+                            .eq(UploadFile::getFolderId, folderId != null ? folderId : 0L)
+                            .eq(UploadFile::getOriginalName, originalName)
+                            .eq(UploadFile::getType, type));
+            if (count != null && count > 0) {
+                throw new BusinessException(ErrorCode.DATA_DUPLICATE, "该附件【" + originalName + "】已存在，请勿重复上传");
+            }
+            storageName = originalName;
+        } else {
+            storageName = UUID.randomUUID().toString().replace("-", "") + "."
+                    + FileUtils.getExtension(originalName);
+        }
 
         // 构建磁盘路径：basePath/projectName/folderName/storageName
         // 例：D:/myAI-tool/travel-files/1/2026年5月出差/发票文件/abc123.pdf

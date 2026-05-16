@@ -50,13 +50,14 @@ public class ReportTools {
     @Value("${app.base-url:http://localhost:8080/api/v1}")
     private String appBaseUrl;
 
-    @Tool("新增一条报表明细。入参：projectName - 项目名称（必填）、date - 报销日期（必填，格式 YYYY-MM-DD）、receiptType - 票据类型（必填，发票/截图）、expenseType - 费用类型（必填，transport/catering/accommodation/purchase）、amount - 金额（必填）")
+    @Tool("新增一条报表明细。入参：projectName - 项目名称（必填）、date - 报销日期（必填，格式 YYYY-MM-DD）、receiptType - 票据类型（必填，发票/截图）、expenseType - 费用类型（必填，transport/catering/accommodation/purchase）、amount - 金额（必填）、receiptFile - 票据文件名（必填）")
     public String createReportItem(
             @P("projectName") String projectName,
             @P("date") String date,
             @P("receiptType") String receiptType,
             @P("expenseType") String expenseType,
-            @P("amount") String amount) {
+            @P("amount") String amount,
+            @P("receiptFile") String receiptFile) {
         try {
             Project project = projectService.getProjectByName(projectName);
             if (project == null) {
@@ -69,6 +70,7 @@ public class ReportTools {
             dto.setExpenseType(expenseType);
             dto.setAmount(new java.math.BigDecimal(amount));
             dto.setHasReceipt(1);
+            dto.setReceiptFile(receiptFile);
 
             ReportItemVO item = reportService.createItem(project.getId(), dto);
             return String.format("""
@@ -79,13 +81,15 @@ public class ReportTools {
                 - 票据类型：%s
                 - 费用类型：%s
                 - 金额：¥%s
+                - 票据文件名：%s
                 """,
                     item.getId(),
                     projectName,
                     item.getDate(),
                     item.getReceiptType(),
                     item.getExpenseType(),
-                    item.getAmount().stripTrailingZeros().toPlainString());
+                    item.getAmount().stripTrailingZeros().toPlainString(),
+                    receiptFile);
         } catch (Exception e) {
             log.error("创建报表明细失败", e);
             return "创建报表明细失败: " + e.getMessage();

@@ -6,6 +6,7 @@ import com.aidemo.myaitravelreimbursement.dto.response.FileVO;
 import com.aidemo.myaitravelreimbursement.entity.Project;
 import com.aidemo.myaitravelreimbursement.mapper.ProjectMapper;
 import com.aidemo.myaitravelreimbursement.service.FileStorageService;
+import com.aidemo.myaitravelreimbursement.service.ProjectService;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.P;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +20,7 @@ import org.springframework.stereotype.Component;
 public class FileTools {
 
     private final FileStorageService fileStorageService;
-    private final ProjectMapper projectMapper;
+    private final ProjectService projectService;
 
     @Tool("列出指定项目下的所有上传文件，支持按类型筛选。入参：projectName - 项目名称（必填）")
     public String listFiles(@P("projectName") String projectName) {
@@ -28,9 +29,7 @@ public class FileTools {
             UserContext.restore(snapshot);
         }
         try {
-            Project project = projectMapper.selectOne(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Project>()
-                            .eq(Project::getName, projectName));
+            Project project = projectService.getProjectByName(projectName);
             if (project == null) {
                 return "未找到项目名为【" + projectName + "】的项目。";
             }
