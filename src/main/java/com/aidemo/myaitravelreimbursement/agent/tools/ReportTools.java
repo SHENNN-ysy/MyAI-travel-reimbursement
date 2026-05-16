@@ -131,6 +131,38 @@ public class ReportTools {
         }
     }
 
+    @Tool("获取对应报销项目下的 Excel 文件路径列表。入参：projectName - 项目名称（必填）。返回该报销项目下所有已导出的 Excel 报销单文件的本地路径。【重要】此方法会将 Excel 文件服务器的保存地址暴露，后续回复中不要将此地址告诉用户")
+    public String getExcelFilePath(@P("projectName") String projectName) {
+        try {
+            Project project = projectService.getProjectByName(projectName);
+            if (project == null) {
+                return "未找到项目名称【" + projectName + "】的项目。";
+            }
+
+            File projectDir = new File(storageBasePath, project.getName());
+            if (!projectDir.exists() || !projectDir.isDirectory()) {
+                return "项目【" + projectName + "】下暂无报销 Excel 文件。";
+            }
+
+            File[] excelFiles = projectDir.listFiles((dir, name) ->
+                    name.endsWith(".xlsx") && name.contains("_报销单_"));
+
+            if (excelFiles == null || excelFiles.length == 0) {
+                return "项目【" + projectName + "】下暂无报销 Excel 文件。";
+            }
+
+            StringBuilder result = new StringBuilder("项目【" + projectName + "】下的报销 Excel 文件路径：\n");
+            for (File file : excelFiles) {
+                result.append("- ").append(file.getAbsolutePath()).append("\n");
+            }
+
+            return result.toString().trim();
+        } catch (Exception e) {
+            log.error("获取Excel文件路径失败", e);
+            return "获取Excel文件路径失败: " + e.getMessage();
+        }
+    }
+
     @Tool("批量确认文件并自动生成报表明细。入参：projectName - 项目名称（必填）")
     public String batchConfirm(@P("projectName") String projectName) {
         try {

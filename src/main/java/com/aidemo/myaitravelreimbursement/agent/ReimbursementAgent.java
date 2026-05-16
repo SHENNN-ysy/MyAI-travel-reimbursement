@@ -161,7 +161,7 @@ public class ReimbursementAgent {
                         recognitionTools,
                         reportTools
                 )
-                .toolProvider(skills.toolProvider())
+                //.toolProvider(skills.toolProvider())
                 .toolProvider(excelMcpToolProvider)
                 .systemMessage(AgentSystemPrompt.SYSTEM_PROMPT)
                 .systemMessageTransformer(systemMessage -> systemMessage + "您可以使用以下技能:\n" + skills.formatAvailableSkills()

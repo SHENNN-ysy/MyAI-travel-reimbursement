@@ -32,7 +32,7 @@ server:
 # JWT 配置
 jwt:
   secret: MyAI-TravelReimbursement-SecretKey-2026-DoNotExpose
-  expiration: 86400000  # 24小时（毫秒）
+  expiration: 43200000  # 12小时（毫秒）
 
 # 前端访问地址（用于 AI 返回完整下载链接）
 app:

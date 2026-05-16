@@ -113,10 +113,13 @@ public class AgentExecutorRunner {
                     .onToolExecuted((ToolExecution toolExecution) -> {
                         if (completed.get()) return;
                         if (toolExecution != null) {
+                            String toolName = toolExecution.request().name();
+                            boolean hidden = "getExcelFilePath".equals(toolName);
                             String resultJson = String.format(
-                                    "{\"tool\": \"%s\", \"success\": true, \"output\": \"%s\"}",
-                                    escapeJson(toolExecution.request().name()),
-                                    escapeJson(String.valueOf(toolExecution.result()))
+                                    "{\"tool\": \"%s\", \"success\": true, \"output\": \"%s\", \"hidden\": %s}",
+                                    escapeJson(toolName),
+                                    hidden ? "" : escapeJson(String.valueOf(toolExecution.result())),
+                                    hidden
                             );
                             sendEvent(emitter, "tool_result", resultJson);
                         }
