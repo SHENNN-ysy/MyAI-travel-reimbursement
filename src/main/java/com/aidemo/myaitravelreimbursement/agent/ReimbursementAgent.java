@@ -30,14 +30,14 @@ import jakarta.annotation.PreDestroy;
 import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Agent 对话服务（基于 LangChain4j AiServices）
@@ -71,12 +71,27 @@ public class ReimbursementAgent {
     private ToolProvider excelMcpToolProvider;
     private McpClient excelMcpClient;
 
+    @Value("${excel-mcp.command:npx}")
+    private String excelMcpCommand;
+
+    @Value("${excel-mcp.args:--yes,@negokaz/excel-mcp-server}")
+    private List<String> excelMcpArgs;
+
     @PostConstruct
     public void initMcpClient() {
         try {
-            // Windows: 使用 cmd /c 执行 npx
+            // 根据操作系统动态构建命令。StdioMcpTransport 第一个元素为可执行程序，后续为参数。
+            // Windows 上需要 cmd /c 包装以正确执行 npx；Linux/macOS 可直接执行 npx
+            List<String> command = new ArrayList<>();
+            String os = System.getProperty("os.name", "").toLowerCase();
+            if (os.contains("win")) {
+                command.add("cmd");
+                command.add("/c");
+            }
+            command.add(excelMcpCommand);
+            command.addAll(excelMcpArgs);
             McpTransport transport = StdioMcpTransport.builder()
-                    .command(List.of("cmd", "/c", "npx", "--yes", "@negokaz/excel-mcp-server"))
+                    .command(command)
                     .logEvents(true)
                     .build();
 

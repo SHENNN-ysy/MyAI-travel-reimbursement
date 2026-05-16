@@ -61,6 +61,13 @@ ai:
   temperature: 1.0
   max-retries: 3
 
+# Excel MCP 工具配置（用于 AI 操作 Excel 文件）
+excel-mcp:
+  command: npx
+  args:
+    - "--yes"
+    - "@negokaz/excel-mcp-server"
+
 # Knife4j 配置
 knife4j:
   enable: true
