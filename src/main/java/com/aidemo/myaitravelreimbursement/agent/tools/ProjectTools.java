@@ -85,7 +85,7 @@ public class ProjectTools {
             }
 
             File projectDir = new File(storageBasePath,
-                     (project.getName() != null ? project.getName() : "项目"));
+                     project.getUserId() + "/" + (project.getName() != null ? project.getName() : "项目"));
             if (!projectDir.exists() || !projectDir.isDirectory()) {
                 return "项目文件夹不存在，无法导出。";
             }

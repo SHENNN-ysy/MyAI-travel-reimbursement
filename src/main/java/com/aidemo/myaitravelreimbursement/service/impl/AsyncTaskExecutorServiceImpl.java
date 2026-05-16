@@ -67,6 +67,7 @@ public class AsyncTaskExecutorServiceImpl implements AsyncTaskExecutorService {
             task.setStatus("failed");
             task.setErrorMessage("文件ID列表解析失败");
             taskMapper.updateById(task);
+            taskMapper.deleteById(task.getId());
             return;
         }
 
@@ -119,6 +120,7 @@ public class AsyncTaskExecutorServiceImpl implements AsyncTaskExecutorService {
 
         task.setStatus("completed");
         taskMapper.updateById(task);
+        taskMapper.deleteById(task.getId());
         log.info("批量识别任务完成: taskId={}, processed={}/{}", taskId, task.getProcessed(), task.getTotal());
     }
 }

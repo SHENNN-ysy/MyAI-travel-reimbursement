@@ -226,13 +226,3 @@ CREATE TABLE IF NOT EXISTS t_user (
 --   updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 -- );
 
--- t_agent_session: 重构为每行一条对话（新增 role 列区分用户/AI，session_id 不再唯一）
--- 1) 添加 role 列
--- ALTER TABLE t_agent_session ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user' COMMENT '消息角色: user=用户消息, assistant=AI回复';
--- 2) 改为 TEXT 存储完整内容
--- ALTER TABLE t_agent_session MODIFY COLUMN last_message TEXT COMMENT '对话内容';
--- 3) 删除 session_id 的 UNIQUE 约束
--- ALTER TABLE t_agent_session DROP INDEX session_id;
--- 4) 添加索引
--- ALTER TABLE t_agent_session ADD INDEX idx_session_id (session_id);
--- ALTER TABLE t_agent_session ADD INDEX idx_project_session (project_id, session_id);

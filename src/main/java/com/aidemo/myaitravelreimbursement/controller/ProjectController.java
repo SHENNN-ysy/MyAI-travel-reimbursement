@@ -97,7 +97,7 @@ public class ProjectController {
         }
 
         File projectDir = new File(storageBasePath,
-                project.getName() != null ? project.getName() : "项目");
+                project.getUserId() + "/" + (project.getName() != null ? project.getName() : "项目"));
         if (!projectDir.exists() || !projectDir.isDirectory()) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
             return;

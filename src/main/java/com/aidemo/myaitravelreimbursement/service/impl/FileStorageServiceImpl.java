@@ -88,22 +88,19 @@ public class FileStorageServiceImpl implements FileStorageService {
                     + FileUtils.getExtension(originalName);
         }
 
-        // 构建磁盘路径：basePath/projectName/folderName/storageName
-        // 例：D:/myAI-tool/travel-files/1/2026年5月出差/发票文件/abc123.pdf
-        String relativePath;
+        // 构建磁盘路径：basePath/{userId}/{projectName}/{folderName}/{storageName}
+        // 例：D:/myAI-tool/travel-files/1001/2026年5月出差/发票文件/abc123.pdf
+        Project project = projectMapper.selectById(projectId);
+        String folderName;
         if (folderId != null && folderId > 0) {
-            // 查询项目名和文件夹名，构建正确路径
-            Project project = projectMapper.selectById(projectId);
             Folder folder = folderMapper.selectById(folderId);
-            // 文件夹名：子文件夹用 folder.name，主文件夹用 project.name
-            String folderName = (folder.getParentId() != null && folder.getParentId() > 0)
+            folderName = (folder.getParentId() != null && folder.getParentId() > 0)
                     ? folder.getName()
                     : project.getName();
-            relativePath =  project.getName() + "/" + folderName + "/" + storageName;
         } else {
-            // 无 folderId，回退到旧路径
-            relativePath = projectId + "/0/" + storageName;
+            folderName = "0";
         }
+        String relativePath = userId + "/" + project.getName() + "/" + folderName + "/" + storageName;
 
         String fullPath = storageConfig.getBasePath() + "/" + relativePath;
         Path dir = Paths.get(fullPath).getParent();

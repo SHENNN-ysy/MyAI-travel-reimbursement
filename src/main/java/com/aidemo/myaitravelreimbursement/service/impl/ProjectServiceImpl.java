@@ -102,19 +102,19 @@ public class ProjectServiceImpl implements ProjectService {
         }
 
         // 3. 在磁盘上创建物理目录结构
-        createPhysicalFolders(projectName, createdSubFolderNames);
+        createPhysicalFolders(projectName, createdSubFolderNames, userId);
     }
 
     /**
      * 在磁盘上创建项目文件夹结构：
-     * basePath/{projectName}/
-     * basePath/{projectName}/发票文件/
-     * basePath/{projectName}/付款截图/
-     * basePath/{projectName}/附加材料/
+     * basePath/{userId}/{projectName}/
+     * basePath/{userId}/{projectName}/发票文件/
+     * basePath/{userId}/{projectName}/付款截图/
+     * basePath/{userId}/{projectName}/附加材料/
      */
-    private void createPhysicalFolders(String projectName, String[] subFolderNames) {
+    private void createPhysicalFolders(String projectName, String[] subFolderNames, Long userId) {
         try {
-            Path mainDir = Paths.get(storageConfig.getBasePath(), projectName);
+            Path mainDir = Paths.get(storageConfig.getBasePath(), String.valueOf(userId), projectName);
             Files.createDirectories(mainDir);
 
             // 子目录：主目录/子文件夹名/

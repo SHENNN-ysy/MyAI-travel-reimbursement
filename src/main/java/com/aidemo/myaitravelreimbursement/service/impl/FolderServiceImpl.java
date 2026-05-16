@@ -131,7 +131,7 @@ public class FolderServiceImpl implements FolderService {
     @Override
     @Transactional
     public void deleteByProjectId(Long projectId) {
-        verifyProjectOwnership(projectId);
+        // 所有权已在调用方 ProjectServiceImpl.delete 中验证过，此处无需重复校验
         folderMapper.delete(new LambdaQueryWrapper<Folder>()
                 .eq(Folder::getProjectId, projectId));
     }

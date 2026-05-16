@@ -1,5 +1,6 @@
 package com.aidemo.myaitravelreimbursement.agent.tools;
 
+import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.dto.request.ReportItemDTO;
 import com.aidemo.myaitravelreimbursement.dto.response.FileVO;
 import com.aidemo.myaitravelreimbursement.dto.response.ReportItemVO;
@@ -109,7 +110,7 @@ public class ReportTools {
             String fileName = project.getName()
                     + "_报销单.xlsx";
 
-            File destDir = new File(storageBasePath, project.getName());
+            File destDir = new File(storageBasePath, project.getUserId() + "/" + project.getName());
             if (!destDir.exists()) {
                 destDir.mkdirs();
             }
@@ -144,7 +145,7 @@ public class ReportTools {
                 return "未找到项目名称【" + projectName + "】的项目。";
             }
 
-            File destFile = new File(new File(storageBasePath, project.getName()),
+            File destFile = new File(new File(storageBasePath, project.getUserId() + "/" + project.getName()),
                     project.getName() + "_报销单.xlsx");
             if (!destFile.exists()) {
                 return "项目【" + projectName + "】下暂无报销 Excel 文件。";

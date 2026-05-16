@@ -102,7 +102,7 @@ public class ReportController {
         }
         String fileName = project.getName()
                 + "_报销单.xlsx";
-        File destFile = new File(new File(storageBasePath, project.getName()), fileName);
+        File destFile = new File(new File(storageBasePath, project.getUserId() + "/" + project.getName()), fileName);
 
         if (!destFile.exists()) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
