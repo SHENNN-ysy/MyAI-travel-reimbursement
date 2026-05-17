@@ -57,15 +57,17 @@ public class ReimbursementAgent {
     private final RecognitionTools recognitionTools;
     private final ReportTools reportTools;
 
-    @Resource
-    private ContentRetriever userguide_contentRetriever;
+//    @Resource
+//    private ContentRetriever userguide_contentRetriever;
+//
+//    @Resource
+//    private ContentRetriever capability_contentRetriever;
+//
+//    @Resource
+//    private ContentRetriever emptyRetriever;
 
     @Resource
-    private ContentRetriever capability_contentRetriever;
-
-    @Resource
-    private ContentRetriever emptyRetriever;
-
+    private ContentRetriever help_contentRetriever;
 
     // ========== MCP Excel 工具提供者 ==========
     private ToolProvider excelMcpToolProvider;
@@ -143,25 +145,26 @@ public class ReimbursementAgent {
      */
     public Assistant createAssistant(String sessionId) {
 
-        QueryTransformer queryTransformer = new CompressingQueryTransformer(chatModel);
+//        QueryTransformer queryTransformer = new CompressingQueryTransformer(chatModel);
         //QueryTransformer queryTransformer1 = new ExpandingQueryTransformer(chatModel());
-        Map<ContentRetriever, String> retrieverToDescription = new HashMap<>();
-        retrieverToDescription.put(userguide_contentRetriever, "AI报销助手--产品介绍使用说明，包含报销流程、操作步骤、使用技巧、工具介绍、常见问题解答等文档");
-        retrieverToDescription.put(capability_contentRetriever, "AI报销助手--工具操作能力说明，包含报销流程、工具能力介绍、调用方式、输入输出说明等文档");
-        retrieverToDescription.put(emptyRetriever, "闲聊、问候、天气、不相关话题，或其他不属于上述技术/职业的问题");
+//        Map<ContentRetriever, String> retrieverToDescription = new HashMap<>();
+//        retrieverToDescription.put(userguide_contentRetriever, "AI报销助手--产品介绍使用说明，包含报销流程、操作步骤、使用技巧、工具介绍、常见问题解答等文档");
+//        retrieverToDescription.put(capability_contentRetriever, "AI报销助手--工具操作能力说明，包含报销流程、工具能力介绍、调用方式、输入输出说明等文档");
+//        retrieverToDescription.put(emptyRetriever, "闲聊、问候、天气、不相关话题，或其他不属于上述技术/职业的问题");
 
-        QueryRouter queryRouter = new LanguageModelQueryRouter(chatModel, retrieverToDescription);
+//        QueryRouter queryRouter = new LanguageModelQueryRouter(chatModel, retrieverToDescription);
+//
+//        RetrievalAugmentor retrievalAugmentor = DefaultRetrievalAugmentor.builder()
+//                .queryTransformer(queryTransformer)
+//                .queryRouter(queryRouter)
+//                .build();
 
-        RetrievalAugmentor retrievalAugmentor = DefaultRetrievalAugmentor.builder()
-                .queryTransformer(queryTransformer)
-                .queryRouter(queryRouter)
-                .build();
-
-        FileSystemSkill skill = ClassPathSkillLoader.loadSkill("skills/full");
+        Skill skill = ClassPathSkillLoader.loadSkill("skills/full");
         Skill skill_full = Skill.builder()
                 .name(skill.name())
                 .description(skill.description())
                 .content(skill.content())
+                .toolProviders(skill.toolProviders())
                 .tools(projectTools, fileTools, recognitionTools, reportTools)
                 .build();
         Skills skills = Skills.from(skill_full);
@@ -170,6 +173,7 @@ public class ReimbursementAgent {
                 .streamingChatModel(chatStreamModel)
                 .chatMemory(memoryManager.getMemory(sessionId))
                 //.retrievalAugmentor(retrievalAugmentor)
+                .contentRetriever(help_contentRetriever)
                 .tools(
                         projectTools,
                         fileTools,
