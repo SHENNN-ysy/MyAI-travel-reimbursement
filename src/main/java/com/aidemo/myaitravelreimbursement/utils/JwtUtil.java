@@ -62,6 +62,10 @@ public class JwtUtil {
         return claims.getSubject();
     }
 
+    public Long getExpiration() {
+        return expiration;
+    }
+
     public boolean isTokenExpired(String token) {
         try {
             Claims claims = parseToken(token);

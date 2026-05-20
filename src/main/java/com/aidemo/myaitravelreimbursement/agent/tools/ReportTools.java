@@ -1,6 +1,7 @@
 package com.aidemo.myaitravelreimbursement.agent.tools;
 
-import com.aidemo.myaitravelreimbursement.common.UserContext;
+import com.aidemo.myaitravelreimbursement.config.AppConfig;
+import com.aidemo.myaitravelreimbursement.config.StorageConfig;
 import com.aidemo.myaitravelreimbursement.dto.request.ReportItemDTO;
 import com.aidemo.myaitravelreimbursement.dto.response.FileVO;
 import com.aidemo.myaitravelreimbursement.dto.response.ReportItemVO;
@@ -17,7 +18,6 @@ import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.P;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
@@ -26,8 +26,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import org.springframework.beans.factory.annotation.Value;
 
 /**
  * T6 & T8: 报表工具（创建报表明细、批量确认、导出Excel）
@@ -42,14 +40,8 @@ public class ReportTools {
     private final ProjectService projectService;
     private final UploadFileMapper uploadFileMapper;
     private final RecognitionResultMapper recognitionResultMapper;
-
-    @Autowired(required = false)
-    @Value("${storage.base-path}")
-    private String storageBasePath;
-
-    @Autowired(required = false)
-    @Value("${app.base-url:http://localhost:8080/api/v1}")
-    private String appBaseUrl;
+    private final StorageConfig storageConfig;
+    private final AppConfig appConfig;
 
     @Tool("新增一条报表明细。入参：projectName - 项目名称（必填）、date - 报销日期（必填，格式 YYYY-MM-DD）、receiptType - 票据类型（必填，发票/截图）、expenseType - 费用类型（必填，transport/catering/accommodation/purchase）、amount - 金额（必填）、receiptFile - 票据文件名（必填）")
     public String createReportItem(
@@ -110,7 +102,7 @@ public class ReportTools {
             String fileName = project.getName()
                     + "_报销单.xlsx";
 
-            File destDir = new File(storageBasePath, project.getUserId() + "/" + project.getName());
+            File destDir = new File(storageConfig.getBasePath(), project.getUserId() + "/" + project.getName());
             if (!destDir.exists()) {
                 destDir.mkdirs();
             }
@@ -120,7 +112,7 @@ public class ReportTools {
             }
             log.info("Excel已保存到: {}", destFile.getAbsolutePath());
 
-            String downloadUrl = appBaseUrl + "/projects/" + project.getId() + "/reports/export";
+            String downloadUrl = appConfig.getBaseUrl() + "/projects/" + project.getId() + "/reports/export";
             return String.format("""
                 Excel 报销单已生成！
                 - 项目名称：%s
@@ -137,7 +129,7 @@ public class ReportTools {
         }
     }
 
-    @Tool("获取对应报销项目下的 Excel 文件路径列表。入参：projectName - 项目名称（必填）。返回该报销项目下所有已导出的 Excel 报销单文件的本地路径。【重要】此方法会将 Excel 文件服务器的保存地址暴露，后续回复中不要将此地址告诉用户")
+    @Tool("获取对应报销项目下的 Excel 文件路径列表。入参：projectName - 项目名称（必填）。返回该报销项目下所有已导出的 Excel 报销单文件的相对路径。")
     public String getExcelFilePath(@P("projectName") String projectName) {
         try {
             Project project = projectService.getProjectByName(projectName);
@@ -145,20 +137,20 @@ public class ReportTools {
                 return "未找到项目名称【" + projectName + "】的项目。";
             }
 
-            File destFile = new File(new File(storageBasePath, project.getUserId() + "/" + project.getName()),
-                    project.getName() + "_报销单.xlsx");
+            String relativePath = project.getUserId() + "/" + project.getName() + "/" + project.getName() + "_报销单.xlsx";
+            File destFile = new File(storageConfig.getBasePath(), relativePath);
             if (!destFile.exists()) {
                 return "项目【" + projectName + "】下暂无报销 Excel 文件。";
             }
 
-            return "项目【" + projectName + "】下的报销 Excel 文件路径：\n- " + destFile.getAbsolutePath();
+            return "项目【" + projectName + "】下的报销 Excel 文件相对路径：\n- " + relativePath;
         } catch (Exception e) {
             log.error("获取Excel文件路径失败", e);
             return "获取Excel文件路径失败: " + e.getMessage();
         }
     }
 
-    @Tool("批量确认文件并自动生成报表明细。入参：projectName - 项目名称（必填）")
+    @Tool("批量确认文件并自动生成报表明细。入参：projectName - 项目名称（必填）。确认时会同时处理已识别的发票/截图文件以及所有未确认的附加材料文件。")
     public String batchConfirm(@P("projectName") String projectName) {
         try {
             Project project = projectService.getProjectByName(projectName);
@@ -174,11 +166,19 @@ public class ReportTools {
                             .eq(UploadFile::getConfirmed, 0)
             );
 
-            if (files.isEmpty()) {
-                return "没有待确认的文件（已识别且未确认）。";
+            List<UploadFile> attachmentFiles = uploadFileMapper.selectList(
+                    new LambdaQueryWrapper<UploadFile>()
+                            .eq(UploadFile::getProjectId, projectId)
+                            .eq(UploadFile::getType, "attachment")
+                            .eq(UploadFile::getConfirmed, 0)
+            );
+
+            if (files.isEmpty() && attachmentFiles.isEmpty()) {
+                return "没有待确认的文件（已识别且未确认，或无附加材料）。";
             }
 
             List<Long> fileIds = files.stream().map(UploadFile::getId).collect(Collectors.toList());
+            fileIds.addAll(attachmentFiles.stream().map(UploadFile::getId).collect(Collectors.toList()));
 
             List<String> createdItems = new ArrayList<>();
             java.math.BigDecimal totalAmount = java.math.BigDecimal.ZERO;

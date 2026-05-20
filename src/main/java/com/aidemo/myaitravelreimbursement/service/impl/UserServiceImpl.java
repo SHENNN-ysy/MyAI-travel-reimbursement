@@ -8,8 +8,10 @@ import com.aidemo.myaitravelreimbursement.service.UserService;
 import com.aidemo.myaitravelreimbursement.utils.JwtUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
@@ -68,6 +70,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public AuthResponse getCurrentUser() {
         User user = UserContext.getUser();
+        log.info(">>> getCurrentUser: UserContext.getUser()={}", user); // 加这行
         if (user == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "用户未登录");
         }

@@ -1,23 +1,25 @@
 package com.aidemo.myaitravelreimbursement.config;
 
-import org.springframework.context.annotation.Bean;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-import java.io.File;
-
-/**
- * Web MVC 配置
- */
 @Configuration
+@RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
+
+    private final StorageConfig storageConfig;
+
+    @Value("${cors.allowed-origins:http://localhost:*,http://127.0.0.1:*,http://8.134.36.221:*}")
+    private String allowedOrigins;
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-                .allowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*")
+                .allowedOriginPatterns(allowedOrigins.split(","))
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(true)
@@ -26,7 +28,7 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        String basePath = "file:" + "D:/myAI-tool/travel-files/";
+        String basePath = "file:" + storageConfig.getBasePath() + "/";
         registry.addResourceHandler("/files/**")
                 .addResourceLocations(basePath);
     }

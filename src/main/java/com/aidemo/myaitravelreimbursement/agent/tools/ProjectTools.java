@@ -1,5 +1,7 @@
 package com.aidemo.myaitravelreimbursement.agent.tools;
 
+import com.aidemo.myaitravelreimbursement.config.AppConfig;
+import com.aidemo.myaitravelreimbursement.config.StorageConfig;
 import com.aidemo.myaitravelreimbursement.dto.response.ProjectDetailVO;
 import com.aidemo.myaitravelreimbursement.entity.Project;
 import com.aidemo.myaitravelreimbursement.service.ProjectService;
@@ -7,7 +9,6 @@ import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.P;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
@@ -28,12 +29,8 @@ import java.util.zip.ZipOutputStream;
 public class ProjectTools {
 
     private final ProjectService projectService;
-
-    @Value("${storage.base-path}")
-    private String storageBasePath;
-
-    @Value("${app.base-url:http://localhost:8080/api/v1}")
-    private String appBaseUrl;
+    private final StorageConfig storageConfig;
+    private final AppConfig appConfig;
 
     @Tool("获取指定项目的基本信息，包括项目名称、日期、人员、预算、状态等。")
     public String getProjectInfo(@P("projectName") String projectName) {
@@ -84,7 +81,7 @@ public class ProjectTools {
                 return "未找到项目名称【" + projectName + "】的项目。";
             }
 
-            File projectDir = new File(storageBasePath,
+            File projectDir = new File(storageConfig.getBasePath(),
                      project.getUserId() + "/" + (project.getName() != null ? project.getName() : "项目"));
             if (!projectDir.exists() || !projectDir.isDirectory()) {
                 return "项目文件夹不存在，无法导出。";
@@ -108,7 +105,7 @@ public class ProjectTools {
                 请复制上述下载地址，在浏览器中打开即可下载 zip 文件。
                 """,
                     project.getName(),
-                    appBaseUrl,
+                    appConfig.getBaseUrl(),
                     project.getId());
         } catch (Exception e) {
             log.error("导出报销项目失败", e);

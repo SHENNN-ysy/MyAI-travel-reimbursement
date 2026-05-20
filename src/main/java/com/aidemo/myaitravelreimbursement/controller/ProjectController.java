@@ -3,6 +3,7 @@ package com.aidemo.myaitravelreimbursement.controller;
 import com.aidemo.myaitravelreimbursement.common.PageResult;
 import com.aidemo.myaitravelreimbursement.common.Result;
 import com.aidemo.myaitravelreimbursement.common.UserContext;
+import com.aidemo.myaitravelreimbursement.config.StorageConfig;
 import com.aidemo.myaitravelreimbursement.dto.request.ProjectCreateDTO;
 import com.aidemo.myaitravelreimbursement.dto.request.ProjectUpdateDTO;
 import com.aidemo.myaitravelreimbursement.dto.response.ProjectDetailVO;
@@ -14,7 +15,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.File;
@@ -38,9 +38,7 @@ public class ProjectController {
 
     private final ProjectService projectService;
     private final ProjectMapper projectMapper;
-
-    @Value("${storage.base-path}")
-    private String storageBasePath;
+    private final StorageConfig storageConfig;
 
     @Operation(summary = "创建项目")
     @PostMapping
@@ -96,7 +94,7 @@ public class ProjectController {
             return;
         }
 
-        File projectDir = new File(storageBasePath,
+        File projectDir = new File(storageConfig.getBasePath(),
                 project.getUserId() + "/" + (project.getName() != null ? project.getName() : "项目"));
         if (!projectDir.exists() || !projectDir.isDirectory()) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);

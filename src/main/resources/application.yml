@@ -2,7 +2,8 @@ spring:
   application:
     name: MyAI-travel-reimbursement
   datasource:
-    url: jdbc:mysql://localhost:3306/travel_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
+    url: jdbc:mysql://travel-mysql:3306/travel_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
+#    url: jdbc:mysql://localhost:3306/travel_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
     username: root
     password: 1234
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -29,6 +30,10 @@ server:
   servlet:
     context-path: /api/v1
 
+# CORS 配置
+cors:
+  allowed-origins: http://localhost:*,http://127.0.0.1:*,http://8.134.36.221:*,http://*.aibillservice.help
+
 # JWT 配置
 jwt:
   secret: MyAI-TravelReimbursement-SecretKey-2026-DoNotExpose
@@ -36,11 +41,13 @@ jwt:
 
 # 前端访问地址（用于 AI 返回完整下载链接）
 app:
-  base-url: http://localhost:8080/api/v1
+  base-url: http://8.134.36.221/api/v1
+#  base-url: http://localhost/api/v1
 
 # 文件存储配置
 storage:
-  base-path: D:/myAI-tool/travel-files
+  base-path: /opt/travel-reimbursement/travel-files
+#  base-path: D:/myAI-tool/travel-files
   allowed-extensions: pdf,jpg,jpeg,png,heic,gif,webp
 
 # AI 大模型配置
@@ -62,11 +69,10 @@ ai:
   max-retries: 3
 
 # Excel MCP 工具配置（用于 AI 操作 Excel 文件）
+# MCP 服务器需以 streamable-http 方式启动：
+#   EXCEL_FILES_PATH=/path/to/files FASTMCP_PORT=8017 uvx excel-mcp-server streamable-http --host 0.0.0.0
 excel-mcp:
-  command: npx
-  args:
-    - "--yes"
-    - "@negokaz/excel-mcp-server"
+  url: http://localhost:8017/mcp
 
 # Knife4j 配置
 knife4j:
@@ -74,6 +80,11 @@ knife4j:
   production: false
   setting:
     language: zh_cn
+
+# RAG 文档配置
+rag:
+  docs-path: /opt/travel-reimbursement/docs
+#  docs-path: D:/myAI-tool/docs
 
 # 日志配置
 logging:

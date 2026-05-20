@@ -10,7 +10,7 @@ import dev.langchain4j.mcp.McpToolProvider;
 import dev.langchain4j.mcp.client.DefaultMcpClient;
 import dev.langchain4j.mcp.client.McpClient;
 import dev.langchain4j.mcp.client.transport.McpTransport;
-import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport;
+import dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.rag.DefaultRetrievalAugmentor;
@@ -33,11 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import org.springframework.util.StringUtils;
 
 /**
  * Agent 对话服务（基于 LangChain4j AiServices）
@@ -73,28 +69,21 @@ public class ReimbursementAgent {
     private ToolProvider excelMcpToolProvider;
     private McpClient excelMcpClient;
 
-    @Value("${excel-mcp.command:npx}")
-    private String excelMcpCommand;
-
-    @Value("${excel-mcp.args:--yes,@negokaz/excel-mcp-server}")
-    private List<String> excelMcpArgs;
+    @Value("${excel-mcp.url:}")
+    private String excelMcpUrl;
 
     @PostConstruct
     public void initMcpClient() {
+        if (!StringUtils.hasText(excelMcpUrl)) {
+            log.warn("excel-mcp.url 未配置，Excel MCP 工具将不启用");
+            return;
+        }
+
         try {
-            // 根据操作系统动态构建命令。StdioMcpTransport 第一个元素为可执行程序，后续为参数。
-            // Windows 上需要 cmd /c 包装以正确执行 npx；Linux/macOS 可直接执行 npx
-            List<String> command = new ArrayList<>();
-            String os = System.getProperty("os.name", "").toLowerCase();
-            if (os.contains("win")) {
-                command.add("cmd");
-                command.add("/c");
-            }
-            command.add(excelMcpCommand);
-            command.addAll(excelMcpArgs);
-            McpTransport transport = StdioMcpTransport.builder()
-                    .command(command)
-                    .logEvents(true)
+            McpTransport transport = StreamableHttpMcpTransport.builder()
+                    .url(excelMcpUrl)
+                    .logRequests(true)
+                    .logResponses(true)
                     .build();
 
             excelMcpClient = DefaultMcpClient.builder()
@@ -106,11 +95,9 @@ public class ReimbursementAgent {
                     .mcpClients(excelMcpClient)
                     .build();
 
-
-            log.info("Excel MCP 客户端初始化成功");
+            log.info("Excel MCP 客户端初始化成功，连接地址: {}", excelMcpUrl);
         } catch (Exception e) {
             log.warn("Excel MCP 客户端初始化失败，将不启用 Excel 工具: {}", e.getMessage());
-            // 不抛异常，避免影响主业务
         }
     }
 
@@ -159,7 +146,7 @@ public class ReimbursementAgent {
 //                .queryRouter(queryRouter)
 //                .build();
 
-        Skill skill = ClassPathSkillLoader.loadSkill("skills/full");
+        FileSystemSkill skill = ClassPathSkillLoader.loadSkill("skills/full");
         Skill skill_full = Skill.builder()
                 .name(skill.name())
                 .description(skill.description())

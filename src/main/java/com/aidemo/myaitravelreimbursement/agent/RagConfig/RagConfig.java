@@ -14,14 +14,19 @@ import dev.langchain4j.rag.query.Query;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.EmbeddingStoreIngestor;
 import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.List;
 
 @Configuration
 public class RagConfig {
+
+    @Value("${rag.docs-path}")
+    private String docsPath;
 
     @Bean
     public EmbeddingModel embeddingModel() {
@@ -46,7 +51,11 @@ public class RagConfig {
     public ContentRetriever help_contentRetriever() {
         // ------ RAG ------
         // 1. 加载文档
-        List<Document> documents = FileSystemDocumentLoader.loadDocuments("src/main/resources/docs");
+        File docsDir = new File(docsPath);
+        if (!docsDir.exists() || !docsDir.isDirectory()) {
+            return query -> Collections.emptyList();
+        }
+        List<Document> documents = FileSystemDocumentLoader.loadDocuments(docsPath);
         // 2. 按 ## 二级标题切分：每个 chunk 从一个 ## 标题开始
         DocumentByRegexSplitter splitter = new DocumentByRegexSplitter(
                 "(?m)^##\\s",  // regex: 匹配 ## 开头的行
@@ -73,7 +82,7 @@ public class RagConfig {
                 .embeddingStore(help_embeddingStore())
                 .embeddingModel(embeddingModel())
                 .maxResults(3) // 最多 3 个检索结果
-                .minScore(0.75) // 过滤掉分数小于 0.75 的结果
+                .minScore(0.75)// 过滤掉分数小于 0.75 的结果
                 .build();
 
 

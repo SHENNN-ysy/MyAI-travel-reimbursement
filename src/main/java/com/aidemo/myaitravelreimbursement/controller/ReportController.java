@@ -3,6 +3,7 @@ package com.aidemo.myaitravelreimbursement.controller;
 import com.aidemo.myaitravelreimbursement.common.PageResult;
 import com.aidemo.myaitravelreimbursement.common.Result;
 import com.aidemo.myaitravelreimbursement.common.UserContext;
+import com.aidemo.myaitravelreimbursement.config.StorageConfig;
 import com.aidemo.myaitravelreimbursement.dto.request.ReportItemDTO;
 import com.aidemo.myaitravelreimbursement.dto.response.ReportItemVO;
 import com.aidemo.myaitravelreimbursement.dto.response.ReportSummaryVO;
@@ -14,7 +15,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
@@ -37,6 +37,7 @@ public class ReportController {
 
     private final ReportService reportService;
     private final ProjectMapper projectMapper;
+    private final StorageConfig storageConfig;
 
     @Operation(summary = "获取报表明细列表（分页）")
     @GetMapping("/items")
@@ -88,7 +89,6 @@ public class ReportController {
     @Operation(summary = "导出Excel报销单")
     @GetMapping("/export")
     public void exportExcel(@PathVariable Long projectId,
-                            @Value("${storage.base-path}") String storageBasePath,
                             HttpServletResponse response) throws IOException {
         Long userId = UserContext.getUserId();
         Project project = projectMapper.selectById(projectId);
@@ -102,7 +102,7 @@ public class ReportController {
         }
         String fileName = project.getName()
                 + "_报销单.xlsx";
-        File destFile = new File(new File(storageBasePath, project.getUserId() + "/" + project.getName()), fileName);
+        File destFile = new File(new File(storageConfig.getBasePath(), project.getUserId() + "/" + project.getName()), fileName);
 
         if (!destFile.exists()) {
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
