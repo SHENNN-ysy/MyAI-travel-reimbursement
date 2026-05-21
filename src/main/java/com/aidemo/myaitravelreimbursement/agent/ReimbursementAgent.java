@@ -79,26 +79,23 @@ public class ReimbursementAgent {
             return;
         }
 
-        try {
-            McpTransport transport = StreamableHttpMcpTransport.builder()
-                    .url(excelMcpUrl)
-                    .logRequests(true)
-                    .logResponses(true)
-                    .build();
+        McpTransport transport = StreamableHttpMcpTransport.builder()
+                .url(excelMcpUrl)
+                .connectionTimeout(java.time.Duration.ofSeconds(30))
+                .readTimeout(java.time.Duration.ofSeconds(60))
+                .build();
 
-            excelMcpClient = DefaultMcpClient.builder()
-                    .key("excel-mcp")
-                    .transport(transport)
-                    .build();
+        McpClient mcpClient = DefaultMcpClient.builder()
+                .key("excel-mcp")
+                .transport(transport)
+                .build();
 
-            excelMcpToolProvider = McpToolProvider.builder()
-                    .mcpClients(excelMcpClient)
-                    .build();
+        excelMcpToolProvider = McpToolProvider.builder()
+                .mcpClients(mcpClient)
+                .build();
 
-            log.info("Excel MCP 客户端初始化成功，连接地址: {}", excelMcpUrl);
-        } catch (Exception e) {
-            log.warn("Excel MCP 客户端初始化失败，将不启用 Excel 工具: {}", e.getMessage());
-        }
+        excelMcpClient = mcpClient;
+        log.info("Excel MCP 客户端初始化成功，连接地址: {}", excelMcpUrl);
     }
 
     @PreDestroy

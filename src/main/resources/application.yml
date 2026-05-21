@@ -4,8 +4,8 @@ spring:
   datasource:
     url: jdbc:mysql://travel-mysql:3306/travel_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
 #    url: jdbc:mysql://localhost:3306/travel_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
-    username: root
-    password: 1234
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
   servlet:
     multipart:
@@ -36,7 +36,7 @@ cors:
 
 # JWT 配置
 jwt:
-  secret: MyAI-TravelReimbursement-SecretKey-2026-DoNotExpose
+  secret: ${JWT_SECRET:}
   expiration: 43200000  # 12小时（毫秒）
 
 # 前端访问地址（用于 AI 返回完整下载链接）
@@ -56,9 +56,9 @@ ai:
   #okhttp
   #Kimi
 #  provider: langchain4j
-  base-url: https://api.moonshot.cn/v1
-  api-key: sk-FBn2jGPgWM6gkp5xN9fptC7TDkwqXzzzy4pq7v7eOsvAsl8K
-  model: kimi-k2.5
+  base-url: ${AI_BASE_URL:https://api.moonshot.cn/v1}
+  api-key: ${AI_API_KEY:}
+  model: ${AI_MODEL:kimi-k2.5}
 
   #      智谱
 #  base-url: https://open.bigmodel.cn/api/paas/v4/
@@ -72,7 +72,8 @@ ai:
 # MCP 服务器需以 streamable-http 方式启动：
 #   EXCEL_FILES_PATH=/path/to/files FASTMCP_PORT=8017 uvx excel-mcp-server streamable-http --host 0.0.0.0
 excel-mcp:
-  url: http://localhost:8017/mcp
+#  url: http://localhost:8017/mcp
+  url: http://excel-mcp:8017/mcp
 
 # Knife4j 配置
 knife4j:
