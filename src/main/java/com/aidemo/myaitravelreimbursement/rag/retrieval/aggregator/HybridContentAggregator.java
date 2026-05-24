@@ -1,8 +1,11 @@
 package com.aidemo.myaitravelreimbursement.rag.retrieval.aggregator;
 
+import com.aidemo.myaitravelreimbursement.rag.trace.TraceContext;
 import dev.langchain4j.rag.content.Content;
+import dev.langchain4j.rag.content.ContentMetadata;
 import dev.langchain4j.rag.content.aggregator.ContentAggregator;
 import dev.langchain4j.rag.query.Query;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -21,16 +24,19 @@ import java.util.stream.Collectors;
  * <p>
  * 本实现执行：去重 + 合并 + relevance-score 排序。
  */
+@Slf4j
 public class HybridContentAggregator implements ContentAggregator {
 
     private final double minScore;
+    private final TraceContext traceContext;
 
-    public HybridContentAggregator(double minScore) {
+    public HybridContentAggregator(double minScore, TraceContext traceContext) {
         this.minScore = minScore;
+        this.traceContext = traceContext;
     }
 
     public HybridContentAggregator() {
-        this(0.0);
+        this(0.0, null);
     }
 
     @Override
@@ -65,19 +71,48 @@ public class HybridContentAggregator implements ContentAggregator {
             }
         }
 
-        return dedupMap.values().stream()
+        List<Content> result = dedupMap.values().stream()
                 .map(cs -> (ContentAndScore) cs)
                 .filter(cs -> cs.score >= minScore)
                 .sorted((a, b) -> Double.compare(b.score, a.score))
                 .map(cs -> cs.content)
                 .collect(Collectors.toList());
+
+        // ---------- 追踪记录 ----------
+        List<String> sources = result.stream()
+                .map(c -> {
+                    try {
+                        String v = c.textSegment().metadata().getString("source_file");
+                        return (v != null && !v.isEmpty()) ? v : "未知来源";
+                    } catch (Exception e) {
+                        return "未知来源";
+                    }
+                })
+                .distinct()
+                .toList();
+
+        String traceId = traceContext != null ? traceContext.currentTraceId() : null;
+        if (traceId != null) {
+            com.aidemo.myaitravelreimbursement.rag.trace.TraceDataHolder.set(
+                    queryToContents.keySet().iterator().next().text(),
+                    result.size(),
+                    sources
+            );
+            log.info("[{}] RAG 检索完成: 查询={}, 命中={}, 来源={}",
+                    traceId,
+                    queryToContents.keySet().iterator().next().text(),
+                    result.size(),
+                    sources);
+        }
+
+        return result;
     }
 
     private static String makeKey(Content content) {
         String text = content.textSegment().text();
-        String source;
+        String source = "";
         try {
-            source = (String) content.metadata().get("source_file");
+            source = content.textSegment().metadata().getString("source_file");
         } catch (Exception e) {
             source = "";
         }
@@ -87,7 +122,7 @@ public class HybridContentAggregator implements ContentAggregator {
     /** 从 Content.metadata() 中提取 score */
     private static double extractScore(Content content) {
         try {
-            Object scoreObj = content.metadata().get("score");
+            Object scoreObj = content.metadata().get(ContentMetadata.SCORE);
             if (scoreObj instanceof Number n) return n.doubleValue();
         } catch (Exception ignored) {}
         return 0.0;

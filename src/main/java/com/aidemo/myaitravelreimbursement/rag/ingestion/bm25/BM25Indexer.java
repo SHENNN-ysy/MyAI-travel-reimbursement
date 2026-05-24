@@ -1,6 +1,7 @@
 package com.aidemo.myaitravelreimbursement.rag.ingestion.bm25;
 
 import com.aidemo.myaitravelreimbursement.rag.types.ChunkRecord;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
@@ -13,6 +14,7 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.search.similarities.BM25Similarity;
 import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.Map;
@@ -31,13 +33,31 @@ import java.util.concurrent.ConcurrentHashMap;
  * - domain: 知识域（StringField）
  */
 @Slf4j
+@Component
 public class BM25Indexer {
+
+    /** 静态单例持有器，供 SparseRetriever 查询时读取索引 */
+    private static volatile BM25Indexer INSTANCE;
+
+    @PostConstruct
+    public void init() {
+        BM25Indexer.INSTANCE = this;
+    }
 
     /** 每个知识域的索引目录 */
     private final Map<String, Directory> domainIndexes = new ConcurrentHashMap<>();
 
     /** 每个知识域的 IndexWriter */
     private final Map<String, IndexWriter> domainWriters = new ConcurrentHashMap<>();
+
+    /**
+     * 返回所有已建立索引的知识域及其对应的 Lucene Directory。
+     * 供 {@link com.aidemo.myaitravelreimbursement.rag.retrieval.sparse.SparseRetriever} 查询时使用。
+     */
+    public static Map<String, Directory> getAllDirectories() {
+        BM25Indexer instance = INSTANCE;
+        return instance != null ? instance.domainIndexes : Map.of();
+    }
 
     /**
      * 为单个 ChunkRecord 建立索引。

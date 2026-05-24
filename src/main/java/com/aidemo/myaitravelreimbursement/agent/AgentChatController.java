@@ -40,6 +40,7 @@ public class AgentChatController {
     public SseEmitter chat(@PathVariable Long projectId,
                            @RequestParam(required = false) String sessionId,
                            @RequestParam String message) {
+        log.info(">>> 收到 Agent 请求: projectId={}, message='{}'", projectId, message);
         // 验证项目归属
         Long userId = UserContext.getUserId();
         Project project = projectMapper.selectById(projectId);

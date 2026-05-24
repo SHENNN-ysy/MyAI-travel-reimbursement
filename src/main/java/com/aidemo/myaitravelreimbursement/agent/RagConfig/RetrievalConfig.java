@@ -3,11 +3,10 @@ package com.aidemo.myaitravelreimbursement.agent.RagConfig;
 import com.aidemo.myaitravelreimbursement.rag.retrieval.aggregator.HybridContentAggregator;
 import com.aidemo.myaitravelreimbursement.rag.retrieval.injector.MarkdownContentInjector;
 import com.aidemo.myaitravelreimbursement.rag.retrieval.retriever.HybridSearchContentRetriever;
-import com.aidemo.myaitravelreimbursement.rag.retrieval.router.KnowledgeDomainRouter;
-import com.aidemo.myaitravelreimbursement.rag.retrieval.router.FixedRouter;
+import com.aidemo.myaitravelreimbursement.rag.retrieval.router.EmbeddingDomainRouter;
 import com.aidemo.myaitravelreimbursement.rag.retrieval.query.DefaultQueryTransformerWrapper;
 import com.aidemo.myaitravelreimbursement.rag.augmentor.ModularRetrievalAugmentorConfig;
-import dev.langchain4j.model.chat.ChatModel;
+import com.aidemo.myaitravelreimbursement.rag.trace.TraceContext;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.rag.RetrievalAugmentor;
 import dev.langchain4j.rag.content.aggregator.ContentAggregator;
@@ -22,7 +21,6 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * RAG 检索层配置。
@@ -50,6 +48,7 @@ public class RetrievalConfig {
     private final RagProperties ragProperties;
     private final EmbeddingModel embeddingModel;
     private final dev.langchain4j.store.embedding.EmbeddingStore<?> embeddingStore;
+    private final TraceContext traceContext;
     private final String chromaCollectionPrefix;
 
     // ------------ ContentRetriever per domain ------------
@@ -78,6 +77,7 @@ public class RetrievalConfig {
                 collectionName,
                 search.getMaxResults(),
                 search.getMinScore(),
+                search.getMinRrfScore(),
                 search.getDenseWeight(),
                 search.getSparseWeight(),
                 search.getRrfK()
@@ -107,20 +107,15 @@ public class RetrievalConfig {
     }
 
     @Bean
-    public QueryRouter queryRouter(ChatModel chatModel, Map<String, ContentRetriever> domainRetrievers) {
-        // LLM 驱动的知识域路由
-        try {
-            return new KnowledgeDomainRouter(chatModel, domainRetrievers, KNOWN_DOMAINS);
-        } catch (Exception e) {
-            log.warn("KnowledgeDomainRouter 初始化失败，使用 FixedRouter fallback: {}", e.getMessage());
-            return new FixedRouter(domainRetrievers.values().stream().collect(Collectors.toList()));
-        }
+    public QueryRouter queryRouter(Map<String, ContentRetriever> domainRetrievers) {
+        // 基于 Embedding 相似度的快速路由，无需额外 LLM 调用
+        return new EmbeddingDomainRouter(embeddingModel, domainRetrievers, traceContext);
     }
 
     @Bean
     public ContentAggregator contentAggregator() {
-        var search = ragProperties.getSearch();
-        return new HybridContentAggregator(search.getMinScore());
+        // 不做分数筛选，RRF 筛选已在 HybridSearchContentRetriever 中完成
+        return new HybridContentAggregator(0.0, traceContext);
     }
 
     @Bean

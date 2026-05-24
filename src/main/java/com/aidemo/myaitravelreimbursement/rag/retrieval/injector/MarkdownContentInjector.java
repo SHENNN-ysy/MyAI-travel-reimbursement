@@ -3,6 +3,7 @@ package com.aidemo.myaitravelreimbursement.rag.retrieval.injector;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.rag.content.Content;
+import dev.langchain4j.rag.content.ContentMetadata;
 import dev.langchain4j.rag.content.injector.ContentInjector;
 
 import java.util.List;
@@ -51,13 +52,13 @@ public class MarkdownContentInjector implements ContentInjector {
             double score = 0.0;
 
             try {
-                Object sourceVal = content.metadata().get("source_file");
-                if (sourceVal != null) source = sourceVal.toString();
+                Object scoreVal = content.metadata().get(ContentMetadata.SCORE);
+                if (scoreVal instanceof Number n) score = n.doubleValue();
             } catch (Exception ignored) {}
 
             try {
-                Object scoreVal = content.metadata().get("score");
-                if (scoreVal instanceof Number n) score = n.doubleValue();
+                String sourceVal = content.textSegment().metadata().getString("source_file");
+                if (sourceVal != null && !sourceVal.isEmpty()) source = sourceVal;
             } catch (Exception ignored) {}
 
             String text = content.textSegment().text();

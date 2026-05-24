@@ -38,6 +38,7 @@ public class HybridSearchContentRetriever implements ContentRetriever {
     private final String collectionName;
     private final int maxResults;
     private final double minScore;
+    private final double minRrfScore;
     private final double denseWeight;
     private final double sparseWeight;
     private final int rrfK;
@@ -68,6 +69,20 @@ public class HybridSearchContentRetriever implements ContentRetriever {
 
             log.debug("HybridSearch: dense={}, sparse={}, fused={}",
                     denseResults.size(), sparseResults.size(), fused.size());
+
+            if (log.isDebugEnabled()) {
+                log.debug("=== HybridSearch fused results (top {}) ===", fused.size());
+                for (int i = 0; i < fused.size(); i++) {
+                    Content c = fused.get(i);
+                    Object scoreObj = c.metadata().get(ContentMetadata.SCORE);
+                    double score = scoreObj instanceof Number n ? n.doubleValue() : 0.0;
+                    String snippet = c.textSegment().text();
+                    if (snippet.length() > 80) snippet = snippet.substring(0, 80) + "...";
+                    log.debug("  [{}] score={} text={}", i + 1, String.format("%.4f", score), snippet);
+                }
+                log.debug("=== End ===");
+            }
+
             return fused;
 
         } catch (Exception e) {
@@ -129,9 +144,21 @@ public class HybridSearchContentRetriever implements ContentRetriever {
                     .analyzerClass(org.apache.lucene.analysis.standard.StandardAnalyzer.class)
                     .build();
 
+            List<SparseRetriever.SparseResult> results = retriever.search(queryText, maxResults * 2);
+            if (results.isEmpty()) {
+                return List.of();
+            }
+
+            // Min-Max 归一化：以批次内最大分为基准
+            double maxScore = results.stream()
+                    .mapToDouble(SparseRetriever.SparseResult::score)
+                    .max().orElse(1.0);
+
             List<Content> contents = new ArrayList<>();
-            for (SparseRetriever.SparseResult r : retriever.search(queryText, maxResults * 2)) {
-                double normalizedScore = normalizeScore(r.score(), false);
+            for (SparseRetriever.SparseResult r : results) {
+                // 归一化到 [0, 1]，然后映射到 [0.3, 1.0] 避免分数过低
+                double normalizedScore = maxScore > 0 ? r.score() / maxScore : 0.0;
+                normalizedScore = 0.3 + normalizedScore * 0.7;
                 Map<ContentMetadata, Object> meta = new EnumMap<>(ContentMetadata.class);
                 meta.put(ContentMetadata.SCORE, normalizedScore);
                 Metadata docMeta = Metadata.from(Map.of("source_file", r.source(), "domain", r.domain()));
@@ -166,30 +193,27 @@ public class HybridSearchContentRetriever implements ContentRetriever {
                     (a, b) -> new ScoredContent(a.content, a.score + b.score));
         }
 
-        return scoreMap.values().stream()
+        // RRF 分数写回 Content metadata，替换原始分数；保留 textSegment 完整，source_file 不丢失
+        List<Content> fused = new ArrayList<>();
+        for (ScoredContent sc : scoreMap.values().stream()
                 .sorted((a, b) -> Double.compare(b.score, a.score))
-                .limit(maxResults)
-                .map(ScoredContent::content)
-                .toList();
+                .filter(sc -> sc.score >= minRrfScore)  // RRF 分数门槛过滤
+                .toList()) {
+            Map<ContentMetadata, Object> newMeta = new EnumMap<>(ContentMetadata.class);
+            newMeta.put(ContentMetadata.SCORE, sc.score);
+            fused.add(new ContentBuilder(sc.content.textSegment(), newMeta));
+        }
+
+        return fused.stream().limit(maxResults).toList();
     }
 
     private static String makeKey(Content content) {
         String text = content.textSegment().text();
         String source = "";
         try {
-            Object v = content.metadata().get(ContentMetadata.SCORE);
-            if (v != null) source = v.toString();
+            source = content.textSegment().metadata().getString("source_file");
         } catch (Exception ignored) {}
         return text.hashCode() + "@" + source;
-    }
-
-    /** 归一化得分到 0~1 */
-    private static double normalizeScore(double rawScore, boolean isVector) {
-        if (isVector) {
-            return Math.max(0, (rawScore - 0.5) * 2);
-        } else {
-            return Math.min(1.0, Math.max(0, rawScore / 10.0));
-        }
     }
 
     // ---------- 内部类 ----------

@@ -2,6 +2,8 @@ package com.aidemo.myaitravelreimbursement.config;
 
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.embedding.onnx.bgesmallzhv15.BgeSmallZhV15EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import lombok.RequiredArgsConstructor;
@@ -68,5 +70,14 @@ public class LangChain4jConfig {
                 .logRequests( true)
                 .logResponses(true)
                 .build();
+    }
+
+    /**
+     * 向量模型 Bean（用于 EmbeddingDomainRouter 和 HybridSearchContentRetriever）
+     */
+    @Bean
+    public EmbeddingModel embeddingModel() {
+        log.info("初始化 BgeSmallZhV15EmbeddingModel 向量模型");
+        return new BgeSmallZhV15EmbeddingModel();
     }
 }

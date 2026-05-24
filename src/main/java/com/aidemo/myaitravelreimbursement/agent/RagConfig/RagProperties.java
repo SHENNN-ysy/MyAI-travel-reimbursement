@@ -14,7 +14,7 @@ public class RagProperties {
 
     /** 文档根目录路径 */
     //private String docsPath = "/opt/travel-reimbursement/docs";
-    private String docsPath = "D:/myAI-tool/travel-files";
+    private String docsPath = "D:/myAI-tool/docs";
 
     private ChromaProperties chroma = new ChromaProperties();
 
@@ -46,8 +46,10 @@ public class RagProperties {
     public static class SearchProperties {
         /** 每次检索返回的最大结果数 */
         private int maxResults = 5;
-        /** 最低相似度得分阈值（0~1） */
-        private double minScore = 0.75;
+        /** 最低相似度得分阈值（0~1），用于原始检索结果（embedding/BM25）过滤 */
+        private double minScore = 0.5;
+        /** RRF 融合分数最低门槛，用于 RRF 融合后过滤 */
+        private double minRrfScore = 0.07;
         /** Dense（向量）检索权重 */
         private double denseWeight = 0.6;
         /** Sparse（BM25）检索权重 */

@@ -1,5 +1,6 @@
 package com.aidemo.myaitravelreimbursement.rag.retrieval.sparse;
 
+import com.aidemo.myaitravelreimbursement.rag.ingestion.bm25.BM25Indexer;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.lucene.analysis.Analyzer;
@@ -7,40 +8,29 @@ import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.similarities.BM25Similarity;
-import org.apache.lucene.store.ByteBuffersDirectory;
 import org.apache.lucene.store.Directory;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 基于 Lucene BM25 的 Sparse（稀疏向量）检索器。
  * <p>
- * 提供两个静态方法：
- * <ul>
- *   <li>{@link #addToIndex(String, String, String, String)} - 添加文档到索引</li>
- *   <li>{@link #search(String, int)} - 执行 BM25 检索</li>
- * </ul>
+ * 查询时从 {@link BM25Indexer} 共享的索引目录读取数据，
+ * 实现索引写入（SparseRetriever.addToIndex）与查询读取（BM25Indexer）的数据一致性。
  * <p>
- * 索引在内存中维护（{@link ByteBuffersDirectory}），
- * 由 {@link com.aidemo.myaitravelreimbursement.rag.ingestion.bm25.BM25Indexer} 负责维护。
+ * 注意：索引的写入由 {@link BM25Indexer#index} 负责，
+ * 本类仅负责查询，不维护索引状态。
  */
 @Slf4j
 public class SparseRetriever {
-
-    private static final Map<String, Directory> DOMAIN_DIRECTORIES = new ConcurrentHashMap<>();
-    private static final Map<String, IndexWriter> DOMAIN_WRITERS = new ConcurrentHashMap<>();
 
     private final Class<? extends Analyzer> analyzerClass;
 
@@ -51,15 +41,25 @@ public class SparseRetriever {
 
     /**
      * 执行 BM25 检索。
+     * <p>
+     * 从 {@link BM25Indexer#getAllDirectories()} 读取所有已建立索引的知识域，
+     * 对每个域执行 Lucene 查询并合并结果。
      *
      * @param queryText  查询文本
      * @param maxResults 最大返回数
      * @return 检索结果列表
      */
     public List<SparseResult> search(String queryText, int maxResults) {
+        Map<String, Directory> allDirectories = BM25Indexer.getAllDirectories();
+
+        if (allDirectories.isEmpty()) {
+            log.debug("SparseRetriever: BM25 index is empty, skipping search");
+            return List.of();
+        }
+
         List<SparseResult> allResults = new ArrayList<>();
 
-        for (Map.Entry<String, Directory> entry : DOMAIN_DIRECTORIES.entrySet()) {
+        for (Map.Entry<String, Directory> entry : allDirectories.entrySet()) {
             String domain = entry.getKey();
             Directory dir = entry.getValue();
             try {
@@ -73,33 +73,6 @@ public class SparseRetriever {
                 .sorted(Comparator.comparingDouble(SparseResult::score).reversed())
                 .limit(maxResults)
                 .toList();
-    }
-
-    /**
-     * 添加文档到指定域的 Lucene 索引。
-     */
-    public static void addToIndex(String domain, String docId, String text, String sourceFile) {
-        try {
-            Directory dir = DOMAIN_DIRECTORIES.computeIfAbsent(domain, d -> new ByteBuffersDirectory());
-            IndexWriter writer = DOMAIN_WRITERS.computeIfAbsent(domain, d -> {
-                try {
-                    return createWriter(dir);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
-
-            Document doc = new Document();
-            doc.add(new org.apache.lucene.document.StringField("id", docId, org.apache.lucene.document.Field.Store.YES));
-            doc.add(new org.apache.lucene.document.TextField("text", text, org.apache.lucene.document.Field.Store.YES));
-            doc.add(new org.apache.lucene.document.TextField("source", sourceFile, org.apache.lucene.document.Field.Store.YES));
-            doc.add(new org.apache.lucene.document.StringField("domain", domain, org.apache.lucene.document.Field.Store.YES));
-
-            writer.updateDocument(new Term("id", docId), doc);
-            writer.commit();
-        } catch (Exception e) {
-            log.error("Failed to add document to BM25 index: id={}", docId, e);
-        }
     }
 
     private List<SparseResult> searchDomain(String domain, Directory dir, String queryText, int maxResults) {
@@ -131,14 +104,6 @@ public class SparseRetriever {
             log.warn("Domain search failed: domain={}", domain, e);
             return List.of();
         }
-    }
-
-    private static IndexWriter createWriter(Directory dir) throws Exception {
-        StandardAnalyzer analyzer = new StandardAnalyzer();
-        IndexWriterConfig config = new IndexWriterConfig(analyzer)
-                .setSimilarity(new BM25Similarity())
-                .setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
-        return new IndexWriter(dir, config);
     }
 
     // ---------- Result type ----------

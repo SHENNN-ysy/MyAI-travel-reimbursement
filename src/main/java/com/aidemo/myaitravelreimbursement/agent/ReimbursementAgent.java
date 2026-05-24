@@ -144,14 +144,14 @@ public class ReimbursementAgent {
                 .chatMemory(memoryManager.getMemory(sessionId))
                 // LangChain4j Advanced RAG: retrievalAugmentor (QueryTransformer + QueryRouter + HybridSearch + RRF + ContentInjector)
                 .retrievalAugmentor(retrievalAugmentor)
-                .tools(
-                        projectTools,
-                        fileTools,
-                        recognitionTools,
-                        reportTools
-                )
-                .toolProvider(skills.toolProvider())
-                .toolProvider(excelMcpToolProvider)
+//                .tools(
+//                        projectTools,
+//                        fileTools,
+//                        recognitionTools,
+//                        reportTools
+//                )
+                //.toolProvider(skills.toolProvider())
+                //.toolProvider(excelMcpToolProvider)
                 .systemMessage(AgentSystemPrompt.SYSTEM_PROMPT)
                 .systemMessageTransformer(systemMessage -> systemMessage + "您可以使用以下技能:\n" + skills.formatAvailableSkills()
                         + "\n当用户的请求与其中一项技能相关时，在继续之前，首先使用\"activate_skill\"工具激活它。");

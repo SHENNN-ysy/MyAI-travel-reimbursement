@@ -4,6 +4,7 @@ import com.aidemo.myaitravelreimbursement.agent.service.AgentService;
 import com.aidemo.myaitravelreimbursement.common.UserContext;
 import com.aidemo.myaitravelreimbursement.rag.trace.TraceCollector;
 import com.aidemo.myaitravelreimbursement.rag.trace.TraceContext;
+import com.aidemo.myaitravelreimbursement.rag.trace.TraceDataHolder;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.PartialThinking;
 import dev.langchain4j.model.chat.response.PartialToolCall;
@@ -58,8 +59,9 @@ public class AgentExecutorRunner {
         UserContext.restore(userContextSnapshot);
         UserContext.setCurrentSnapshot(userContextSnapshot);
 
-        // 初始化追踪上下文
+        // 初始化追踪上下文，绑定 traceId 到 ThreadLocal
         String traceId = traceContext.newTraceId();
+        traceContext.bind(traceId);
         log.debug("[{}] Agent stream started: projectId={}, sessionId={}", traceId, projectId, sessionId);
 
         emitter.onCompletion(() -> log.debug("SSE completed: projectId={}, sessionId={}", projectId, sessionId));
@@ -144,11 +146,12 @@ public class AgentExecutorRunner {
                                 saveAssistantMessage(sessionId, assistantContent.toString());
 
                                 // 全链路追踪记录
+                                TraceDataHolder.TraceData td = TraceDataHolder.get();
                                 traceCollector.record(TraceCollector.builder()
-                                        .traceId(traceContext.currentTraceId())
+                                        .traceId(traceId)
                                         .query(message)
-                                        .retrievedCount(0)  // retrieval count not exposed here
-                                        .sources(List.of())
+                                        .retrievedCount(td != null ? td.retrievedCount() : 0)
+                                        .sources(td != null ? td.sources() : List.of())
                                         .responseSummary(truncate(assistantContent.toString(), 200))
                                         .elapsedMs(System.currentTimeMillis() - startTime)
                                         .build());
@@ -156,6 +159,8 @@ public class AgentExecutorRunner {
                                 sendEvent(emitter, "done", "{\"summary\": \"\"}");
                                 emitter.complete();
                                 UserContext.clearCurrentSnapshot();
+                                traceContext.clear();
+                                TraceDataHolder.clear();
                                 long elapsed = System.currentTimeMillis() - startTime;
                                 log.info("Agent stream completed: sessionId={}, elapsed={}ms, response length={}",
                                         sessionId, elapsed, assistantContent.length());
@@ -175,6 +180,8 @@ public class AgentExecutorRunner {
                                 sendEvent(emitter, "error", "{\"error\": \"" + escapeJson(error.getMessage()) + "\"}");
                                 emitter.completeWithError(error);
                                 UserContext.clearCurrentSnapshot();
+                                traceContext.clear();
+                                TraceDataHolder.clear();
                             } catch (Exception e) {
                                 log.warn("Failed to complete SSE with error", e);
                             }
@@ -193,6 +200,8 @@ public class AgentExecutorRunner {
                     sendEvent(emitter, "error", "{\"error\": \"" + escapeJson(e.getMessage()) + "\"}");
                     emitter.completeWithError(e);
                     UserContext.clearCurrentSnapshot();
+                    traceContext.clear();
+                    TraceDataHolder.clear();
                 } catch (Exception ex) {
                     log.warn("Failed to complete SSE with error", ex);
                 }
