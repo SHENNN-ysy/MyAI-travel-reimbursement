@@ -39,6 +39,8 @@
         <langchain4j-mcp.version>1.13.0-beta23</langchain4j-mcp.version>
         <langchain4j-skills.version>1.13.0-beta23</langchain4j-skills.version>
         <langchain4j-embeddings-bge-small-zh-v15.version>1.13.0-beta23</langchain4j-embeddings-bge-small-zh-v15.version>
+        <langchain4j-chroma.version>1.13.0-beta23</langchain4j-chroma.version>
+        <lucene.version>8.11.4</lucene.version>
     </properties>
 
     <repositories>
@@ -46,6 +48,12 @@
             <id>central</id>
             <name>Maven Central</name>
             <url>https://repo1.maven.org/maven2</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
         </repository>
         <repository>
             <id>aliyun</id>
@@ -176,6 +184,30 @@
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-mcp</artifactId>
             <version>${langchain4j-mcp.version}</version>
+        </dependency>
+
+        <!-- LangChain4j ChromaDB integration -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-chroma</artifactId>
+            <version>${langchain4j-chroma.version}</version>
+        </dependency>
+
+        <!-- Lucene: BM25 + StandardAnalyzer for full-text search -->
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-core</artifactId>
+            <version>${lucene.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-analyzers-common</artifactId>
+            <version>${lucene.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-queryparser</artifactId>
+            <version>${lucene.version}</version>
         </dependency>
 
         <!-- Jackson -->

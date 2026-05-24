@@ -2,6 +2,8 @@ package com.aidemo.myaitravelreimbursement.agent;
 
 import com.aidemo.myaitravelreimbursement.agent.service.AgentService;
 import com.aidemo.myaitravelreimbursement.common.UserContext;
+import com.aidemo.myaitravelreimbursement.rag.trace.TraceCollector;
+import com.aidemo.myaitravelreimbursement.rag.trace.TraceContext;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.PartialThinking;
 import dev.langchain4j.model.chat.response.PartialToolCall;
@@ -15,6 +17,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -35,6 +38,8 @@ public class AgentExecutorRunner {
 
     private final ReimbursementAgent reimbursementAgent;
     private final AgentService agentService;
+    private final TraceContext traceContext;
+    private final TraceCollector traceCollector;
 
     @Qualifier("sseScheduler")
     private final ScheduledExecutorService sseScheduler;
@@ -52,6 +57,10 @@ public class AgentExecutorRunner {
         // 在异步线程中恢复用户上下文，确保 Tool 调用链能获取到 userId
         UserContext.restore(userContextSnapshot);
         UserContext.setCurrentSnapshot(userContextSnapshot);
+
+        // 初始化追踪上下文
+        String traceId = traceContext.newTraceId();
+        log.debug("[{}] Agent stream started: projectId={}, sessionId={}", traceId, projectId, sessionId);
 
         emitter.onCompletion(() -> log.debug("SSE completed: projectId={}, sessionId={}", projectId, sessionId));
         emitter.onTimeout(() -> log.debug("SSE timeout: projectId={}, sessionId={}", projectId, sessionId));
@@ -133,6 +142,17 @@ public class AgentExecutorRunner {
                                 if (f != null) f.cancel(false);
                                 flushBuffer.run();
                                 saveAssistantMessage(sessionId, assistantContent.toString());
+
+                                // 全链路追踪记录
+                                traceCollector.record(TraceCollector.builder()
+                                        .traceId(traceContext.currentTraceId())
+                                        .query(message)
+                                        .retrievedCount(0)  // retrieval count not exposed here
+                                        .sources(List.of())
+                                        .responseSummary(truncate(assistantContent.toString(), 200))
+                                        .elapsedMs(System.currentTimeMillis() - startTime)
+                                        .build());
+
                                 sendEvent(emitter, "done", "{\"summary\": \"\"}");
                                 emitter.complete();
                                 UserContext.clearCurrentSnapshot();
@@ -214,5 +234,10 @@ public class AgentExecutorRunner {
                 .replace("\n", "\\n")
                 .replace("\r", "\\r")
                 .replace("\t", "\\t");
+    }
+
+    private static String truncate(String text, int maxLen) {
+        if (text == null || text.length() <= maxLen) return text;
+        return text.substring(0, maxLen) + "...";
     }
 }

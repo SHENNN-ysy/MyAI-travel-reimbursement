@@ -86,6 +86,20 @@ knife4j:
 rag:
   docs-path: /opt/travel-reimbursement/docs
 #  docs-path: D:/myAI-tool/docs
+#  chroma:
+#    # ChromaDB 服务地址（需启动：docker run -p 8000:8000 chromadb/chroma）
+#    # 当前使用 InMemoryEmbeddingStore，此配置暂时无效，保留以便将来切换回 ChromaDB
+#    base-url: ${CHROMA_BASE_URL:http://localhost:8000}
+#    collection-prefix: travel-
+  chunking:
+    max-chunk-size: 2000
+    overlap: 200
+  search:
+    max-results: 5
+    min-score: 0.6
+    dense-weight: 0.6
+    sparse-weight: 0.4
+    rrf-k: 60
 
 # 日志配置
 logging:

@@ -13,15 +13,8 @@ import dev.langchain4j.mcp.client.transport.McpTransport;
 import dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
-import dev.langchain4j.rag.DefaultRetrievalAugmentor;
 import dev.langchain4j.rag.RetrievalAugmentor;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.rag.query.router.LanguageModelQueryRouter;
-import dev.langchain4j.rag.query.router.QueryRouter;
-import dev.langchain4j.rag.query.transformer.CompressingQueryTransformer;
-import dev.langchain4j.rag.query.transformer.QueryTransformer;
 import dev.langchain4j.service.AiServices;
-import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.tool.ToolProvider;
 import dev.langchain4j.skills.*;
@@ -53,17 +46,9 @@ public class ReimbursementAgent {
     private final RecognitionTools recognitionTools;
     private final ReportTools reportTools;
 
-//    @Resource
-//    private ContentRetriever userguide_contentRetriever;
-//
-//    @Resource
-//    private ContentRetriever capability_contentRetriever;
-//
-//    @Resource
-//    private ContentRetriever emptyRetriever;
-
+    // LangChain4j Advanced RAG: RetrievalAugmentor (QueryRouter + HybridSearch + RRF + ContentInjector)
     @Resource
-    private ContentRetriever help_contentRetriever;
+    private RetrievalAugmentor retrievalAugmentor;
 
     // ========== MCP Excel 工具提供者 ==========
     private ToolProvider excelMcpToolProvider;
@@ -81,8 +66,8 @@ public class ReimbursementAgent {
 
         McpTransport transport = StreamableHttpMcpTransport.builder()
                 .url(excelMcpUrl)
-                .connectionTimeout(java.time.Duration.ofSeconds(30))
-                .readTimeout(java.time.Duration.ofSeconds(60))
+//                .connectionTimeout(java.time.Duration.ofSeconds(30))
+//                .readTimeout(java.time.Duration.ofSeconds(60))
                 .build();
 
         McpClient mcpClient = DefaultMcpClient.builder()
@@ -141,6 +126,7 @@ public class ReimbursementAgent {
 //        RetrievalAugmentor retrievalAugmentor = DefaultRetrievalAugmentor.builder()
 //                .queryTransformer(queryTransformer)
 //                .queryRouter(queryRouter)
+//                .
 //                .build();
 
         FileSystemSkill skill = ClassPathSkillLoader.loadSkill("skills/full");
@@ -156,8 +142,8 @@ public class ReimbursementAgent {
         AiServices<Assistant> builder = AiServices.builder(Assistant.class)
                 .streamingChatModel(chatStreamModel)
                 .chatMemory(memoryManager.getMemory(sessionId))
-                //.retrievalAugmentor(retrievalAugmentor)
-                .contentRetriever(help_contentRetriever)
+                // LangChain4j Advanced RAG: retrievalAugmentor (QueryTransformer + QueryRouter + HybridSearch + RRF + ContentInjector)
+                .retrievalAugmentor(retrievalAugmentor)
                 .tools(
                         projectTools,
                         fileTools,
