@@ -17,6 +17,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Set;
 
 @Slf4j
 @Component
@@ -26,6 +27,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserMapper userMapper;
+
+    private static final Set<String> PUBLIC_PATHS = Set.of(
+            "/api/v1/auth/login",
+            "/api/v1/auth/register",
+            "/swagger-ui",
+            "/v3/api-docs"
+    );
 
     @Override
     protected void doFilterInternal(
@@ -41,46 +49,36 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (path.equals("/api/v1/auth/login")
-                || path.equals("/api/v1/auth/register")
-                || path.startsWith("/swagger-ui")
-                || path.startsWith("/v3/api-docs")) {
+        if (isPublicPath(path)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String token = null;
-
-        String authHeader = request.getHeader("Authorization");
-        if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
-            token = authHeader.substring(7);
-        }
+        String token = getTokenFromRequest(request);
 
         if (!StringUtils.hasText(token)) {
-            Cookie[] cookies = request.getCookies();
-            if (cookies != null) {
-                for (Cookie c : cookies) {
-                    if ("access_token".equals(c.getName())) {
-                        token = c.getValue();
-                        break;
-                    }
-                }
-            }
+            sendUnauthorized(response, "未登录或登录已过期，请重新登录");
+            return;
         }
 
         try {
-            if (StringUtils.hasText(token) && !jwtUtil.isTokenExpired(token)) {
-                Long userId = jwtUtil.getUserIdFromToken(token);
-                //log.info(">>> token解析后 userId={}", userId);  // 加这行
-                User user = userMapper.selectById(userId);
-                //log.info(">>> 数据库查询 user={}", user);
-                if (user != null && user.getStatus() == 1) {
-                    UserContext.setUser(user);
-                    //log.info(">>> UserContext.setUser 成功, userId={}", user.getId()); // 加这行
-                }
+            if (jwtUtil.isTokenExpired(token)) {
+                sendUnauthorized(response, "登录已过期，请重新登录");
+                return;
+            }
+
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            User user = userMapper.selectById(userId);
+            if (user != null && user.getStatus() == 1) {
+                UserContext.setUser(user);
+            } else {
+                sendUnauthorized(response, "用户不存在或已被禁用");
+                return;
             }
         } catch (Exception e) {
-            log.error(">>> JwtAuthFilter 异常", e);  // 加这行
+            log.error("JwtAuthFilter 解析token失败", e);
+            sendUnauthorized(response, "Token无效，请重新登录");
+            return;
         }
 
         try {
@@ -88,6 +86,36 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         } finally {
             UserContext.clear();
         }
+    }
+
+    private boolean isPublicPath(String path) {
+        return PUBLIC_PATHS.stream().anyMatch(path::equals) ||
+               PUBLIC_PATHS.stream().anyMatch(path::startsWith);
+    }
+
+    private String getTokenFromRequest(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie c : cookies) {
+                if ("access_token".equals(c.getName())) {
+                    return c.getValue();
+                }
+            }
+        }
+        return null;
+    }
+
+    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json;charset=UTF-8");
+        response.setCharacterEncoding("UTF-8");
+        addCorsHeaders(response);
+        response.getWriter().write("{\"code\":401,\"message\":\"" + message + "\",\"data\":null}");
     }
 
     private void addCorsHeaders(HttpServletResponse response) {

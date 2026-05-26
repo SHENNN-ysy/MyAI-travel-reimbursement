@@ -1,6 +1,7 @@
 package com.aidemo.myaitravelreimbursement.agent.RagConfig;
 
 import com.aidemo.myaitravelreimbursement.rag.retrieval.aggregator.HybridContentAggregator;
+import com.aidemo.myaitravelreimbursement.rag.retrieval.aggregator.ScoringRerankingAggregator;
 import com.aidemo.myaitravelreimbursement.rag.retrieval.injector.MarkdownContentInjector;
 import com.aidemo.myaitravelreimbursement.rag.retrieval.retriever.HybridSearchContentRetriever;
 import com.aidemo.myaitravelreimbursement.rag.retrieval.router.EmbeddingDomainRouter;
@@ -8,6 +9,7 @@ import com.aidemo.myaitravelreimbursement.rag.retrieval.query.DefaultQueryTransf
 import com.aidemo.myaitravelreimbursement.rag.augmentor.ModularRetrievalAugmentorConfig;
 import com.aidemo.myaitravelreimbursement.rag.trace.TraceContext;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.scoring.ScoringModel;
 import dev.langchain4j.rag.RetrievalAugmentor;
 import dev.langchain4j.rag.content.aggregator.ContentAggregator;
 import dev.langchain4j.rag.content.injector.ContentInjector;
@@ -16,6 +18,7 @@ import dev.langchain4j.rag.query.router.QueryRouter;
 import dev.langchain4j.rag.query.transformer.QueryTransformer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -50,6 +53,9 @@ public class RetrievalConfig {
     private final dev.langchain4j.store.embedding.EmbeddingStore<?> embeddingStore;
     private final TraceContext traceContext;
     private final String chromaCollectionPrefix;
+
+    @Autowired(required = false)
+    private ScoringModel scoringModel;
 
     // ------------ ContentRetriever per domain ------------
 
@@ -114,8 +120,23 @@ public class RetrievalConfig {
 
     @Bean
     public ContentAggregator contentAggregator() {
-        // 不做分数筛选，RRF 筛选已在 HybridSearchContentRetriever 中完成
-        return new HybridContentAggregator(0.0, traceContext);
+        var search = ragProperties.getSearch();
+        ContentAggregator hybridAggregator = new HybridContentAggregator(0.0, traceContext);
+
+        if (search.isRerankEnabled() && scoringModel != null) {
+            log.info("启用 Cross-Encoder Reranking: topK={}, minScore={}, model={}",
+                    search.getRerankTopK(),
+                    ragProperties.getReranker().getMinScore(),
+                    scoringModel.getClass().getSimpleName());
+            return new ScoringRerankingAggregator(
+                    hybridAggregator,
+                    scoringModel,
+                    ragProperties.getReranker().getMinScore(),
+                    search.getRerankTopK(),
+                    traceContext);
+        }
+
+        return hybridAggregator;
     }
 
     @Bean

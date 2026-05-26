@@ -40,6 +40,7 @@
         <langchain4j-skills.version>1.13.0-beta23</langchain4j-skills.version>
         <langchain4j-embeddings-bge-small-zh-v15.version>1.13.0-beta23</langchain4j-embeddings-bge-small-zh-v15.version>
         <langchain4j-chroma.version>1.13.0-beta23</langchain4j-chroma.version>
+        <langchain4j-onnx-scoring.version>1.15.0-beta25</langchain4j-onnx-scoring.version>
         <lucene.version>8.11.4</lucene.version>
     </properties>
 
@@ -191,6 +192,19 @@
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-chroma</artifactId>
             <version>${langchain4j-chroma.version}</version>
+        </dependency>
+
+        <!-- LangChain4j ONNX Scoring (BGE-Reranker cross-encoder) -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-onnx-scoring</artifactId>
+            <version>${langchain4j-onnx-scoring.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.microsoft.onnxruntime</groupId>
+                    <artifactId>onnxruntime</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Lucene: BM25 + StandardAnalyzer for full-text search -->

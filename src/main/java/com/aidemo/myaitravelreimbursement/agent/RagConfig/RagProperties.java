@@ -22,6 +22,8 @@ public class RagProperties {
 
     private SearchProperties search = new SearchProperties();
 
+    private RerankerProperties reranker = new RerankerProperties();
+
     @Data
     public static class ChromaProperties {
         /** ChromaDB 服务器地址（覆盖 host:port） */
@@ -37,7 +39,7 @@ public class RagProperties {
     @Data
     public static class ChunkingProperties {
         /** 单个 Chunk 最大字符数 */
-        private int maxChunkSize = 1000;
+        private int maxChunkSize = 1500;
         /** 相邻 Chunk 重叠字符数 */
         private int overlap = 100;
     }
@@ -55,6 +57,22 @@ public class RagProperties {
         /** Sparse（BM25）检索权重 */
         private double sparseWeight = 0.4;
         /** RRF 融合参数 k */
-        private int rrfK = 60;
+        private int rrfK = 10;
+        /** 是否启用重排序（reranking） */
+        private boolean rerankEnabled = true;
+        /** 重排序后保留的最大结果数 */
+        private int rerankTopK = 5;
+    }
+
+    @Data
+    public static class RerankerProperties {
+        /** BGE Reranker 模型文件路径（ONNX 格式） */
+        private String modelPath;
+        /** 分词器配置文件路径（tokenizer.json） */
+        private String tokenizerPath;
+        /** 精排阶段最低分数阈值（0~1），低于此值的 Content 被丢弃 */
+        private double minScore = 0.0;
+        /** 是否使用 GPU（需要 onnxruntime_gpu） */
+        private boolean useGpu = false;
     }
 }

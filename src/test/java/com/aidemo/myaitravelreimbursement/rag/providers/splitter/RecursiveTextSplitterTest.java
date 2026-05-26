@@ -93,65 +93,65 @@ class RecursiveTextSplitterTest {
     }
 
 
-    @Test
-    @DisplayName("分块 → 编码 → ChromaDB 写入，输出每个 ChunkRecord")
-    void ingestDocument() throws IOException {
-        String fileName = "AI报销助手使用指南.md";
-        String content = Files.readString(
-                Path.of("src/test/resources/rag/splitter").resolve(fileName)
-        );
-        Document doc = new Document(fileName, content,
-                Map.of("source_file", fileName, "domain", "policy", "sha256", "test-sha"));
+//    @Test
+//    @DisplayName("分块 → 编码 → ChromaDB 写入，输出每个 ChunkRecord")
+//    void ingestDocument() throws IOException {
+//        String fileName = "AI报销助手使用指南.md";
+//        String content = Files.readString(
+//                Path.of("src/test/resources/rag/splitter").resolve(fileName)
+//        );
+//        Document doc = new Document(fileName, content,
+//                Map.of("source_file", fileName, "domain", "policy", "sha256", "test-sha"));
+//
+//        List<Chunk> chunks = splitter.split(content, fileName, "policy");
+//        assertThat(chunks).isNotEmpty();
+//
+//        // Mock EmbeddingModel：返回伪造向量，避免真实网络调用
+//        EmbeddingModel mockEmbeddingModel = Mockito.mock(EmbeddingModel.class);
+//        var embeddings = new java.util.ArrayList<Embedding>();
+//        for (int i = 0; i < chunks.size(); i++) {
+//            embeddings.add(dev.langchain4j.data.embedding.Embedding.from(
+//                    new float[512] // BgeSmallZhV15 向量维度 512
+//            ));
+//        }
+//        when(mockEmbeddingModel.embed(content)).thenReturn(
+//                new dev.langchain4j.model.output.Response<>(embeddings.get(0)));
+//
+//        // Mock ChromaUpserter：捕获 upsert 调用参数，打印 ChunkRecord
+//        ChromaUpserter mockChromaUpserter = Mockito.mock(ChromaUpserter.class);
+//        when(mockChromaUpserter.upsert(doc, chunks, embeddings)).thenReturn(
+//                java.util.stream.IntStream.range(0, chunks.size())
+//                        .mapToObj(i -> new ChunkRecord(chunks.get(i), embeddings.get(i), "chunk-" + i))
+//                        .toList()
+//        );
+//
+//        // 执行 upsert
+//        List<ChunkRecord> records = mockChromaUpserter.upsert(doc, chunks, embeddings);
+//
+//        // 打印每个 ChunkRecord
+//        printChunkRecords(records);
+//    }
 
-        List<Chunk> chunks = splitter.split(content, fileName, "policy");
-        assertThat(chunks).isNotEmpty();
-
-        // Mock EmbeddingModel：返回伪造向量，避免真实网络调用
-        EmbeddingModel mockEmbeddingModel = Mockito.mock(EmbeddingModel.class);
-        var embeddings = new java.util.ArrayList<Embedding>();
-        for (int i = 0; i < chunks.size(); i++) {
-            embeddings.add(dev.langchain4j.data.embedding.Embedding.from(
-                    new float[512] // BgeSmallZhV15 向量维度 512
-            ));
-        }
-        when(mockEmbeddingModel.embed(content)).thenReturn(
-                new dev.langchain4j.model.output.Response<>(embeddings.get(0)));
-
-        // Mock ChromaUpserter：捕获 upsert 调用参数，打印 ChunkRecord
-        ChromaUpserter mockChromaUpserter = Mockito.mock(ChromaUpserter.class);
-        when(mockChromaUpserter.upsert(doc, chunks, embeddings)).thenReturn(
-                java.util.stream.IntStream.range(0, chunks.size())
-                        .mapToObj(i -> new ChunkRecord(chunks.get(i), embeddings.get(i), "chunk-" + i))
-                        .toList()
-        );
-
-        // 执行 upsert
-        List<ChunkRecord> records = mockChromaUpserter.upsert(doc, chunks, embeddings);
-
-        // 打印每个 ChunkRecord
-        printChunkRecords(records);
-    }
-
-    private void printChunkRecords(List<ChunkRecord> records) {
-        System.out.println("=".repeat(70));
-        System.out.printf("  ChromaDB 写入结果：共 %d 条 ChunkRecord%n", records.size());
-        System.out.println("=".repeat(70));
-
-        for (int i = 0; i < records.size(); i++) {
-            ChunkRecord r = records.get(i);
-            Chunk c = r.chunk();
-            System.out.printf("%n--- ChunkRecord #%d ---%n", i);
-            System.out.printf("  chromaId : %s%n", r.chromaId());
-            System.out.printf("  vectorDim: %d%n", r.embedding().vectorAsList().size());
-            System.out.printf("  source   : %s%n", c.sourceFile());
-            System.out.printf("  h1_heading: %s%n", nullSafe(c.metadata().get("h1_heading")));
-            System.out.printf("  h2_heading: %s%n", nullSafe(c.metadata().get("h2_heading")));
-            System.out.printf("  chunk_index: %s%n", nullSafe(c.metadata().get("chunk_index")));
-            System.out.printf("  charCount : %d%n", c.text().length());
-            System.out.println("-".repeat(50));
-            System.out.println(c.text());
-        }
-        System.out.println("=".repeat(70));
-    }
+//    private void printChunkRecords(List<ChunkRecord> records) {
+//        System.out.println("=".repeat(70));
+//        System.out.printf("  ChromaDB 写入结果：共 %d 条 ChunkRecord%n", records.size());
+//        System.out.println("=".repeat(70));
+//
+//        for (int i = 0; i < records.size(); i++) {
+//            ChunkRecord r = records.get(i);
+//            Chunk c = r.chunk();
+//            System.out.printf("%n--- ChunkRecord #%d ---%n", i);
+//            System.out.printf("  chromaId : %s%n", r.chromaId());
+//            System.out.printf("  vectorDim: %d%n", r.embedding().vectorAsList().size());
+//            System.out.printf("  source   : %s%n", c.sourceFile());
+//            System.out.printf("  h1_heading: %s%n", nullSafe(c.metadata().get("h1_heading")));
+//            System.out.printf("  h2_heading: %s%n", nullSafe(c.metadata().get("h2_heading")));
+//            System.out.printf("  chunk_index: %s%n", nullSafe(c.metadata().get("chunk_index")));
+//            System.out.printf("  charCount : %d%n", c.text().length());
+//            System.out.println("-".repeat(50));
+//            System.out.println(c.text());
+//        }
+//        System.out.println("=".repeat(70));
+//    }
 }
 

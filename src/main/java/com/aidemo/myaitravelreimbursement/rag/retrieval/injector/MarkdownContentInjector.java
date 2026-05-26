@@ -58,7 +58,10 @@ public class MarkdownContentInjector implements ContentInjector {
 
             try {
                 String sourceVal = content.textSegment().metadata().getString("source_file");
-                if (sourceVal != null && !sourceVal.isEmpty()) source = sourceVal;
+                if (sourceVal != null && !sourceVal.isEmpty()) {
+                    // 只取文件名，去掉完整路径
+                    source = java.nio.file.Paths.get(sourceVal).getFileName().toString();
+                }
             } catch (Exception ignored) {}
 
             String text = content.textSegment().text();

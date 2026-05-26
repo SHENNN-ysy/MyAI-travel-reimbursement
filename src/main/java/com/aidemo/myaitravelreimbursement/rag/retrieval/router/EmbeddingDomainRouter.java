@@ -87,7 +87,7 @@ public class EmbeddingDomainRouter implements QueryRouter {
             }
 
             // 取相似度最高的域（相似度 > 阈值才返回，否则返回全部）
-            double threshold = 0.68;
+            double threshold = 0.62;
             double topScore = scores.values().stream().max(Double::compareTo).orElse(0.0);
 
             List<String> matchedDomains;

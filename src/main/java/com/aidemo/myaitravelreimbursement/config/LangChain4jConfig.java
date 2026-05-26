@@ -1,18 +1,24 @@
 package com.aidemo.myaitravelreimbursement.config;
 
+import com.aidemo.myaitravelreimbursement.agent.RagConfig.RagProperties;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.bgesmallzhv15.BgeSmallZhV15EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
+import dev.langchain4j.model.scoring.ScoringModel;
+import dev.langchain4j.model.scoring.onnx.OnnxScoringModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.io.File;
 import java.time.Duration;
+
+import ai.onnxruntime.OrtSession;
 
 /**
  * LangChain4j 全局配置
@@ -28,6 +34,7 @@ import java.time.Duration;
 public class LangChain4jConfig {
 
     private final AiProperties aiProperties;
+    private final RagProperties ragProperties;
 
     /**
      * 非流式 ChatModel Bean（用于 AI 识别等场景）
@@ -79,5 +86,51 @@ public class LangChain4jConfig {
     public EmbeddingModel embeddingModel() {
         log.info("初始化 BgeSmallZhV15EmbeddingModel 向量模型");
         return new BgeSmallZhV15EmbeddingModel();
+    }
+
+    /**
+     * Cross-Encoder 重排序模型 Bean（用于 ReRankingContentAggregator）
+     * <p>
+     * 基于 BAAI/bge-reranker-base ONNX 版本，对 query-chunk 对做相关性打分。
+     * 模型文件需提前下载至本地目录：
+     * https://huggingface.co/BAAI/bge-reranker-base/tree/main
+     */
+    @Bean
+    public ScoringModel scoringModel() {
+        var reranker = ragProperties.getReranker();
+        String modelPath = reranker.getModelPath();
+        String tokenizerPath = reranker.getTokenizerPath();
+
+        if (modelPath == null || modelPath.isBlank() || tokenizerPath == null || tokenizerPath.isBlank()) {
+            log.warn("Reranker 模型路径未配置，跳过 ScoringModel 初始化");
+            return null;
+        }
+
+        File modelFile = new File(modelPath);
+        File tokenizerFile = new File(tokenizerPath);
+
+        if (!modelFile.exists()) {
+            log.warn("Reranker 模型文件不存在: {}，跳过 ScoringModel 初始化", modelPath);
+            return null;
+        }
+        if (!tokenizerFile.exists()) {
+            log.warn("Reranker 分词器文件不存在: {}，跳过 ScoringModel 初始化", tokenizerPath);
+            return null;
+        }
+
+        log.info("初始化 BGE-Reranker ONNX 模型: modelPath={}, tokenizerPath={}", modelPath, tokenizerPath);
+
+        if (reranker.isUseGpu()) {
+            log.info("使用 GPU 加速（CUDA）");
+            try {
+                OrtSession.SessionOptions sessionOptions = new OrtSession.SessionOptions();
+                sessionOptions.addCUDA(0);
+                return new OnnxScoringModel(modelPath, sessionOptions, tokenizerPath);
+            } catch (Exception e) {
+                log.warn("GPU 模式初始化失败（CUDA 不可用），回退到 CPU: {}", e.getMessage());
+                return new OnnxScoringModel(modelPath, tokenizerPath);
+            }
+        }
+        return new OnnxScoringModel(modelPath, tokenizerPath);
     }
 }
